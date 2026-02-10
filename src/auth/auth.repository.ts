@@ -86,7 +86,10 @@ export class AuthRepository {
     };
   }
 
-  async createUserFromAd(username: string, adInfo: { nombre: string; apellido?: string; email: string }): Promise<{
+  async createUserFromAd(
+    username: string,
+    adInfo: { nombre: string; apellido?: string; email: string },
+  ): Promise<{
     id: string;
     username: string;
     nombre: string;
@@ -100,7 +103,10 @@ export class AuthRepository {
   }> {
     // Generar un hash de contraseña dummy (no se usará porque autentican por AD)
     // Usamos un hash válido pero aleatorio que nunca coincidirá con ninguna contraseña
-    const dummyPasswordHash = bcrypt.hashSync(`${username}_AD_DUMMY_${Date.now()}`, 10);
+    const dummyPasswordHash = bcrypt.hashSync(
+      `${username}_AD_DUMMY_${Date.now()}`,
+      10,
+    );
 
     // Área por defecto si no se puede determinar
     const defaultArea = 'USUARIO';

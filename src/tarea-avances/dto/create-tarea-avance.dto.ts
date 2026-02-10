@@ -1,4 +1,10 @@
-import { IsArray, IsDateString, IsNumberString, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsNumberString,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateTareaAvanceDto {
   @IsNumberString()

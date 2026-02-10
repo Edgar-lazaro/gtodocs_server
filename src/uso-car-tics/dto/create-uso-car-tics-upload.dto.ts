@@ -1,7 +1,8 @@
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { Transform } from 'class-transformer';
 
-export class CreateUsoCarTicsDto {
+/** Body para POST /uso-car-tics/upload (foto_km_inicial y foto_km_final vienen como archivos) */
+export class CreateUsoCarTicsUploadDto {
   @IsString()
   vehiculo!: string;
 
@@ -20,21 +21,11 @@ export class CreateUsoCarTicsDto {
   @IsString()
   kilometraje_inicial!: string;
 
-  /** URL donde se almacena la imagen (ej. desde /uploads/imagenes/uso-car-tics/...) */
-  @IsOptional()
-  @IsString()
-  foto_km_inicial?: string;
-
   @IsString()
   hora_final!: string;
 
   @IsString()
   kilometraje_final!: string;
-
-  /** URL donde se almacena la imagen */
-  @IsOptional()
-  @IsString()
-  foto_km_final?: string;
 
   @IsOptional()
   @Transform(({ value }) =>

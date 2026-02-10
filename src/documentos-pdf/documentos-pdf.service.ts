@@ -18,14 +18,25 @@ export class DocumentosPdfService {
   ) {}
 
   private isAdmin(roles: string[] | undefined): boolean {
-    return Array.isArray(roles) && roles.some(r => String(r).toUpperCase() === 'ADMIN');
+    return (
+      Array.isArray(roles) &&
+      roles.some((r) => String(r).toUpperCase() === 'ADMIN')
+    );
   }
 
   private isJefe(roles: string[] | undefined): boolean {
-    return Array.isArray(roles) && roles.some(r => String(r).toUpperCase() === 'JEFE');
+    return (
+      Array.isArray(roles) &&
+      roles.some((r) => String(r).toUpperCase() === 'JEFE')
+    );
   }
 
-  async findAllForUser(userId: string, roles: string[], gerenciaId: number | null, jefaturaId: number | null) {
+  async findAllForUser(
+    userId: string,
+    roles: string[],
+    gerenciaId: number | null,
+    jefaturaId: number | null,
+  ) {
     const rows = await this.prisma.documentos_pdf.findMany({
       where: this.isAdmin(roles)
         ? gerenciaId === null
@@ -88,10 +99,15 @@ export class DocumentosPdfService {
 
   async create(
     userId: string,
-    identity: { username: string; gerenciaId: number | null; jefaturaId: number | null },
+    identity: {
+      username: string;
+      gerenciaId: number | null;
+      jefaturaId: number | null;
+    },
     dto: CreateDocumentoPdfDto,
   ) {
-    const usuarioNombre = identity.username.length > 0 ? identity.username : dto.usuario_nombre;
+    const usuarioNombre =
+      identity.username.length > 0 ? identity.username : dto.usuario_nombre;
     const gerenciaId = identity.gerenciaId ?? dto.gerencia_id;
     const jefaturaId = identity.jefaturaId ?? dto.jefatura_id;
 
@@ -140,10 +156,16 @@ export class DocumentosPdfService {
     };
 
     try {
-      const updated = await this.prisma.documentos_pdf.update({ where: { id }, data });
+      const updated = await this.prisma.documentos_pdf.update({
+        where: { id },
+        data,
+      });
       return serializeBigInt(updated);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -159,10 +181,15 @@ export class DocumentosPdfService {
     }
 
     try {
-      const deleted = await this.prisma.documentos_pdf.delete({ where: { id } });
+      const deleted = await this.prisma.documentos_pdf.delete({
+        where: { id },
+      });
       return serializeBigInt(deleted);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;

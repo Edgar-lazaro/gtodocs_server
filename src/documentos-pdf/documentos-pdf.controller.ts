@@ -39,11 +39,19 @@ export class DocumentosPdfController {
   @Get()
   findAll(@Req() req: any) {
     const userId = req.user?.sub ?? req.user?.id;
-    const roles: string[] = Array.isArray(req.user?.roles) ? req.user.roles : [];
+    const roles: string[] = Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
     const gerenciaIdRaw = req.user?.gerenciaId;
-    const gerenciaId = gerenciaIdRaw === null || gerenciaIdRaw === undefined ? null : Number(gerenciaIdRaw);
+    const gerenciaId =
+      gerenciaIdRaw === null || gerenciaIdRaw === undefined
+        ? null
+        : Number(gerenciaIdRaw);
     const jefaturaIdRaw = req.user?.jefaturaId;
-    const jefaturaId = jefaturaIdRaw === null || jefaturaIdRaw === undefined ? null : Number(jefaturaIdRaw);
+    const jefaturaId =
+      jefaturaIdRaw === null || jefaturaIdRaw === undefined
+        ? null
+        : Number(jefaturaIdRaw);
     return this.service.findAllForUser(
       userId,
       roles,
@@ -61,11 +69,19 @@ export class DocumentosPdfController {
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: any) {
     const userId = req.user?.sub ?? req.user?.id;
-    const roles: string[] = Array.isArray(req.user?.roles) ? req.user.roles : [];
+    const roles: string[] = Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
     const gerenciaIdRaw = req.user?.gerenciaId;
-    const gerenciaId = gerenciaIdRaw === null || gerenciaIdRaw === undefined ? null : Number(gerenciaIdRaw);
+    const gerenciaId =
+      gerenciaIdRaw === null || gerenciaIdRaw === undefined
+        ? null
+        : Number(gerenciaIdRaw);
     const jefaturaIdRaw = req.user?.jefaturaId;
-    const jefaturaId = jefaturaIdRaw === null || jefaturaIdRaw === undefined ? null : Number(jefaturaIdRaw);
+    const jefaturaId =
+      jefaturaIdRaw === null || jefaturaIdRaw === undefined
+        ? null
+        : Number(jefaturaIdRaw);
     return this.service.findOneForUser(
       id,
       userId,
@@ -80,14 +96,22 @@ export class DocumentosPdfController {
   create(@Req() req: any, @Body() dto: CreateDocumentoPdfDto) {
     const userId = req.user?.sub ?? req.user?.id;
     const username = String(req.user?.username ?? '').trim();
-    const roles: string[] = Array.isArray(req.user?.roles) ? req.user.roles : [];
-    const isAdmin = roles.some(r => String(r).toUpperCase() === 'ADMIN');
-    const isJefe = roles.some(r => String(r).toUpperCase() === 'JEFE');
+    const roles: string[] = Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+    const isAdmin = roles.some((r) => String(r).toUpperCase() === 'ADMIN');
+    const isJefe = roles.some((r) => String(r).toUpperCase() === 'JEFE');
 
     const gerenciaIdRaw = req.user?.gerenciaId;
     const jefaturaIdRaw = req.user?.jefaturaId;
-    const gerenciaId = gerenciaIdRaw === null || gerenciaIdRaw === undefined ? null : Number(gerenciaIdRaw);
-    const jefaturaId = jefaturaIdRaw === null || jefaturaIdRaw === undefined ? null : Number(jefaturaIdRaw);
+    const gerenciaId =
+      gerenciaIdRaw === null || gerenciaIdRaw === undefined
+        ? null
+        : Number(gerenciaIdRaw);
+    const jefaturaId =
+      jefaturaIdRaw === null || jefaturaIdRaw === undefined
+        ? null
+        : Number(jefaturaIdRaw);
 
     const jwtGerenciaId = Number.isFinite(gerenciaId) ? gerenciaId : null;
     const jwtJefaturaId = Number.isFinite(jefaturaId) ? jefaturaId : null;
@@ -103,10 +127,14 @@ export class DocumentosPdfController {
 
     // Si el JWT trae gerencia/jefatura, exigir que coincidan con el body (evita spoofing).
     if (jwtGerenciaId !== null && dto.gerencia_id !== jwtGerenciaId) {
-      throw new ForbiddenException('No puedes registrar documentos para otra gerencia');
+      throw new ForbiddenException(
+        'No puedes registrar documentos para otra gerencia',
+      );
     }
     if (jwtJefaturaId !== null && dto.jefatura_id !== jwtJefaturaId) {
-      throw new ForbiddenException('No puedes registrar documentos para otra jefatura');
+      throw new ForbiddenException(
+        'No puedes registrar documentos para otra jefatura',
+      );
     }
 
     return this.service.create(
@@ -149,7 +177,9 @@ export class DocumentosPdfController {
       }),
       fileFilter: (_req, file, cb) => {
         const mimetype = String(file?.mimetype ?? '').toLowerCase();
-        const ext = String(path.extname(file?.originalname ?? '')).toLowerCase();
+        const ext = String(
+          path.extname(file?.originalname ?? ''),
+        ).toLowerCase();
         if (mimetype === 'application/pdf' || ext === '.pdf') {
           cb(null, true);
           return;
@@ -175,14 +205,22 @@ export class DocumentosPdfController {
 
     const userId = req.user?.sub ?? req.user?.id;
     const username = String(req.user?.username ?? '').trim();
-    const roles: string[] = Array.isArray(req.user?.roles) ? req.user.roles : [];
-    const isAdmin = roles.some(r => String(r).toUpperCase() === 'ADMIN');
-    const isJefe = roles.some(r => String(r).toUpperCase() === 'JEFE');
+    const roles: string[] = Array.isArray(req.user?.roles)
+      ? req.user.roles
+      : [];
+    const isAdmin = roles.some((r) => String(r).toUpperCase() === 'ADMIN');
+    const isJefe = roles.some((r) => String(r).toUpperCase() === 'JEFE');
 
     const gerenciaIdRaw = req.user?.gerenciaId;
     const jefaturaIdRaw = req.user?.jefaturaId;
-    const gerenciaId = gerenciaIdRaw === null || gerenciaIdRaw === undefined ? null : Number(gerenciaIdRaw);
-    const jefaturaId = jefaturaIdRaw === null || jefaturaIdRaw === undefined ? null : Number(jefaturaIdRaw);
+    const gerenciaId =
+      gerenciaIdRaw === null || gerenciaIdRaw === undefined
+        ? null
+        : Number(gerenciaIdRaw);
+    const jefaturaId =
+      jefaturaIdRaw === null || jefaturaIdRaw === undefined
+        ? null
+        : Number(jefaturaIdRaw);
 
     const jwtGerenciaId = Number.isFinite(gerenciaId) ? gerenciaId : null;
     const jwtJefaturaId = Number.isFinite(jefaturaId) ? jefaturaId : null;
@@ -195,10 +233,14 @@ export class DocumentosPdfController {
     }
 
     if (jwtGerenciaId !== null && body.gerencia_id !== jwtGerenciaId) {
-      throw new ForbiddenException('No puedes registrar documentos para otra gerencia');
+      throw new ForbiddenException(
+        'No puedes registrar documentos para otra gerencia',
+      );
     }
     if (jwtJefaturaId !== null && body.jefatura_id !== jwtJefaturaId) {
-      throw new ForbiddenException('No puedes registrar documentos para otra jefatura');
+      throw new ForbiddenException(
+        'No puedes registrar documentos para otra jefatura',
+      );
     }
 
     const relative = resolveAdjuntoRelativeDir('checklists', {
@@ -208,14 +250,19 @@ export class DocumentosPdfController {
     const url = buildPublicFileUrl(req, relative, file.filename);
 
     const dto: CreateDocumentoPdfDto = {
-      nombre_archivo: (body.nombre_archivo ?? file.originalname ?? file.filename).toString(),
+      nombre_archivo: (
+        body.nombre_archivo ??
+        file.originalname ??
+        file.filename
+      ).toString(),
       tipo_documento: body.tipo_documento,
       url_storage: url,
       usuario_nombre: body.usuario_nombre,
       gerencia_id: body.gerencia_id,
       jefatura_id: body.jefatura_id,
       checklist_nombre: body.checklist_nombre,
-      tamano_bytes: (body.tamano_bytes ?? (Number.isFinite(file.size) ? String(file.size) : undefined)) as any,
+      tamano_bytes: (body.tamano_bytes ??
+        (Number.isFinite(file.size) ? String(file.size) : undefined)) as any,
     };
 
     return this.service.create(

@@ -1,12 +1,6 @@
-import {
-  IsNumberString,
-  IsObject,
-  IsOptional,
-  IsString,
-  IsUUID,
-} from 'class-validator';
+import { IsNumberString, IsOptional, IsString, IsUUID } from 'class-validator';
 
-export class CreateCombustibleDto {
+export class CreateCombustibleUploadDto {
   @IsString()
   hora_ini!: string;
 
@@ -35,10 +29,4 @@ export class CreateCombustibleDto {
 
   @IsNumberString()
   lvl_km_fin!: string;
-
-  @IsObject()
-  foto_ini!: Record<string, any>;
-
-  @IsObject()
-  foto_fin!: Record<string, any>;
 }

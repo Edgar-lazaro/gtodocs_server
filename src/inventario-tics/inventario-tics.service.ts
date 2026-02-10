@@ -12,7 +12,8 @@ import { UpdateInventarioTicsDto } from './dto/update-inventario-tics.dto';
 function parseOptionalIntId(idRaw: string | undefined): number | undefined {
   if (idRaw === undefined) return undefined;
   const parsed = Number(idRaw);
-  if (!Number.isInteger(parsed)) throw new BadRequestException('Invalid gerencia');
+  if (!Number.isInteger(parsed))
+    throw new BadRequestException('Invalid gerencia');
   return parsed;
 }
 
@@ -20,13 +21,16 @@ function parseOptionalIntId(idRaw: string | undefined): number | undefined {
 export class InventarioTicsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async resolveInventarioTableFromGerencia(gerenciaId: number): Promise<string | null> {
+  private async resolveInventarioTableFromGerencia(
+    gerenciaId: number,
+  ): Promise<string | null> {
     const row = await this.prisma.gerencias.findUnique({
       where: { id: gerenciaId },
       select: { tabla_inventario: true },
     });
 
-    if (!row) throw new BadRequestException(`gerencia no existe: ${gerenciaId}`);
+    if (!row)
+      throw new BadRequestException(`gerencia no existe: ${gerenciaId}`);
 
     const table = row.tabla_inventario?.trim();
     if (!table) return null;
@@ -65,7 +69,9 @@ export class InventarioTicsService {
       }
     }
 
-    const rows = await this.prisma.inventario_tics.findMany({ orderBy: { id: 'desc' } });
+    const rows = await this.prisma.inventario_tics.findMany({
+      orderBy: { id: 'desc' },
+    });
     return serializeBigInt(rows);
   }
 
@@ -98,13 +104,21 @@ export class InventarioTicsService {
 
   async create(dto: CreateInventarioTicsDto) {
     if (dto.gerencia !== undefined) {
-      const g = await this.prisma.gerencias.findUnique({ where: { id: dto.gerencia }, select: { id: true } });
-      if (!g) throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
+      const g = await this.prisma.gerencias.findUnique({
+        where: { id: dto.gerencia },
+        select: { id: true },
+      });
+      if (!g)
+        throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
     }
     if (dto.jefatura !== undefined) {
       const jid = BigInt(dto.jefatura);
-      const j = await this.prisma.jefaturas.findUnique({ where: { id: jid }, select: { id: true } });
-      if (!j) throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
+      const j = await this.prisma.jefaturas.findUnique({
+        where: { id: jid },
+        select: { id: true },
+      });
+      if (!j)
+        throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
     }
 
     const created = await this.prisma.inventario_tics.create({
@@ -117,8 +131,14 @@ export class InventarioTicsService {
         estado: dto.estado,
         ubicacion: dto.ubicacion,
         img: dto.img,
-        gerencias: dto.gerencia !== undefined ? { connect: { id: dto.gerencia } } : undefined,
-        jefaturas: dto.jefatura !== undefined ? { connect: { id: BigInt(dto.jefatura) } } : undefined,
+        gerencias:
+          dto.gerencia !== undefined
+            ? { connect: { id: dto.gerencia } }
+            : undefined,
+        jefaturas:
+          dto.jefatura !== undefined
+            ? { connect: { id: BigInt(dto.jefatura) } }
+            : undefined,
       },
     });
 
@@ -134,13 +154,21 @@ export class InventarioTicsService {
     }
 
     if (dto.gerencia !== undefined) {
-      const g = await this.prisma.gerencias.findUnique({ where: { id: dto.gerencia }, select: { id: true } });
-      if (!g) throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
+      const g = await this.prisma.gerencias.findUnique({
+        where: { id: dto.gerencia },
+        select: { id: true },
+      });
+      if (!g)
+        throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
     }
     if (dto.jefatura !== undefined) {
       const jid = BigInt(dto.jefatura);
-      const j = await this.prisma.jefaturas.findUnique({ where: { id: jid }, select: { id: true } });
-      if (!j) throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
+      const j = await this.prisma.jefaturas.findUnique({
+        where: { id: jid },
+        select: { id: true },
+      });
+      if (!j)
+        throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
     }
 
     const data: any = {
@@ -152,15 +180,27 @@ export class InventarioTicsService {
       estado: dto.estado,
       ubicacion: dto.ubicacion,
       img: dto.img,
-      gerencias: dto.gerencia !== undefined ? { connect: { id: dto.gerencia } } : undefined,
-      jefaturas: dto.jefatura !== undefined ? { connect: { id: BigInt(dto.jefatura) } } : undefined,
+      gerencias:
+        dto.gerencia !== undefined
+          ? { connect: { id: dto.gerencia } }
+          : undefined,
+      jefaturas:
+        dto.jefatura !== undefined
+          ? { connect: { id: BigInt(dto.jefatura) } }
+          : undefined,
     };
 
     try {
-      const updated = await this.prisma.inventario_tics.update({ where: { id }, data });
+      const updated = await this.prisma.inventario_tics.update({
+        where: { id },
+        data,
+      });
       return serializeBigInt(updated);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -176,10 +216,15 @@ export class InventarioTicsService {
     }
 
     try {
-      const deleted = await this.prisma.inventario_tics.delete({ where: { id } });
+      const deleted = await this.prisma.inventario_tics.delete({
+        where: { id },
+      });
       return serializeBigInt(deleted);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;

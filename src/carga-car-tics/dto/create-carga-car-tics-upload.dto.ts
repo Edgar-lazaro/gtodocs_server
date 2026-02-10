@@ -1,30 +1,18 @@
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { Transform } from 'class-transformer';
 
-export class CreateCargaCarTicsDto {
+export class CreateCargaCarTicsUploadDto {
   @IsString()
   operador!: string;
 
   @IsString()
   km_bf_carga!: string;
 
-  /** URL donde se almacena la imagen (ej. desde /uploads/imagenes/carga-car-tics/...) */
-  @IsString()
-  foto_km_bf!: string;
-
   @IsString()
   km_af_carga!: string;
 
-  /** URL donde se almacena la imagen */
-  @IsString()
-  foto_km_af!: string;
-
   @IsString()
   vehiculo!: string;
-
-  /** URL donde se almacena la imagen del ticket */
-  @IsString()
-  foto_ticket!: string;
 
   @IsOptional()
   @Transform(({ value }) =>

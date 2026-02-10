@@ -56,13 +56,15 @@ model carga_car_tics {
   created_at  DateTime @default(now()) @db.Timestamptz(6)
   operador    String
   km_bf_carga String
-  foto_km_bf  Bytes
+  foto_km_bf  String   // URL donde se almacena la imagen
   km_af_carga String
-  foto_km_af  Bytes
+  foto_km_af  String   // URL donde se almacena la imagen
   vehiculo    String
-  foto_ticket Bytes
+  foto_ticket String   // URL donde se almacena la imagen
+  gerenciaId  Int?     @db.SmallInt
 
-  vehiculoRef vehiculos @relation(fields: [vehiculo], references: [nombre_clave], onDelete: NoAction, onUpdate: NoAction)
+  vehiculoRef vehiculos  @relation(fields: [vehiculo], references: [nombre_clave], onDelete: NoAction, onUpdate: NoAction)
+  gerencia    gerencias? @relation(fields: [gerenciaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model cargos {
@@ -128,6 +130,8 @@ model gerencias {
   jefaturas        jefaturas[]
   usuarios         User[]
   vehiculos        vehiculos[]
+  carga_car_tics   carga_car_tics[]
+  uso_car_tics     uso_car_tics[]
 }
 
 model inventario_tics {
@@ -244,13 +248,15 @@ model uso_car_tics {
   hora_inicio         String
   nivel_combustible   String
   kilometraje_inicial String
-  foto_km_inicial     Bytes?
+  foto_km_inicial     String?  // URL donde se almacena la imagen
   hora_final          String
   kilometraje_final   String
-  foto_km_final       Bytes?
+  foto_km_final       String?  // URL donde se almacena la imagen
+  gerenciaId          Int?     @db.SmallInt
 
   vehiculo    String
-  vehiculoRef vehiculos @relation(fields: [vehiculo], references: [nombre_clave], onDelete: NoAction, onUpdate: NoAction)
+  vehiculoRef vehiculos  @relation(fields: [vehiculo], references: [nombre_clave], onDelete: NoAction, onUpdate: NoAction)
+  gerencia    gerencias? @relation(fields: [gerenciaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model vehiculos {

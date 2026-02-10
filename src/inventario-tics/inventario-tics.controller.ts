@@ -27,7 +27,9 @@ export class InventarioTicsController {
     @Query('gerencia_id') gerencia_id?: string,
     @Query('gerenciaId') gerenciaId?: string,
   ) {
-    return this.service.findAll({ gerencia: gerencia ?? gerencia_id ?? gerenciaId });
+    return this.service.findAll({
+      gerencia: gerencia ?? gerencia_id ?? gerenciaId,
+    });
   }
 
   @Get(':id')
@@ -37,7 +39,9 @@ export class InventarioTicsController {
     @Query('gerencia_id') gerencia_id?: string,
     @Query('gerenciaId') gerenciaId?: string,
   ) {
-    return this.service.findOne(id, { gerencia: gerencia ?? gerencia_id ?? gerenciaId });
+    return this.service.findOne(id, {
+      gerencia: gerencia ?? gerencia_id ?? gerenciaId,
+    });
   }
 
   @Post()

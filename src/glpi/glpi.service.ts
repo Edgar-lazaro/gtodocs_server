@@ -12,15 +12,11 @@ export class GlpiService {
       );
     }
 
-    return axios.post(
-      `${this.baseUrl}/apirest.php/Ticket`,
-      data,
-      {
-        headers: {
-          'Authorization': `Bearer ${this.token}`,
-          'Content-Type': 'application/json',
-        },
+    return axios.post(`${this.baseUrl}/apirest.php/Ticket`, data, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
       },
-    );
+    });
   }
 }

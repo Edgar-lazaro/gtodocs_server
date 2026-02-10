@@ -14,7 +14,9 @@ export class NotificacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll() {
-    const rows = await this.prisma.notificaciones.findMany({ orderBy: { id: 'desc' } });
+    const rows = await this.prisma.notificaciones.findMany({
+      orderBy: { id: 'desc' },
+    });
     return serializeBigInt(rows);
   }
 
@@ -36,7 +38,8 @@ export class NotificacionesService {
       where: { id: dto.usuario_id },
       select: { id: true },
     });
-    if (!usuario) throw new BadRequestException(`usuario_id no existe: ${dto.usuario_id}`);
+    if (!usuario)
+      throw new BadRequestException(`usuario_id no existe: ${dto.usuario_id}`);
 
     const created = await this.prisma.notificaciones.create({
       data: {
@@ -64,7 +67,10 @@ export class NotificacionesService {
         where: { id: dto.usuario_id },
         select: { id: true },
       });
-      if (!usuario) throw new BadRequestException(`usuario_id no existe: ${dto.usuario_id}`);
+      if (!usuario)
+        throw new BadRequestException(
+          `usuario_id no existe: ${dto.usuario_id}`,
+        );
     }
 
     const data: any = {
@@ -77,10 +83,16 @@ export class NotificacionesService {
     };
 
     try {
-      const updated = await this.prisma.notificaciones.update({ where: { id }, data });
+      const updated = await this.prisma.notificaciones.update({
+        where: { id },
+        data,
+      });
       return serializeBigInt(updated);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -96,10 +108,15 @@ export class NotificacionesService {
     }
 
     try {
-      const deleted = await this.prisma.notificaciones.delete({ where: { id } });
+      const deleted = await this.prisma.notificaciones.delete({
+        where: { id },
+      });
       return serializeBigInt(deleted);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;

@@ -8,7 +8,6 @@ export class CreateTareaDto {
   @IsString()
   descripcion?: string;
 
-  
   @IsString()
   usuario_asignado: string;
 

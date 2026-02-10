@@ -47,10 +47,16 @@ export class VehiculosService {
     }
 
     try {
-      const updated = await this.prisma.vehiculos.update({ where: { id }, data: dto });
+      const updated = await this.prisma.vehiculos.update({
+        where: { id },
+        data: dto,
+      });
       return serializeBigInt(updated);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -69,7 +75,10 @@ export class VehiculosService {
       const deleted = await this.prisma.vehiculos.delete({ where: { id } });
       return serializeBigInt(deleted);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;

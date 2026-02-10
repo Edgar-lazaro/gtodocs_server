@@ -32,7 +32,6 @@ export class CreateInventarioTicsDto {
   @IsInt()
   gerencia?: number;
 
-
   @IsOptional()
   @IsNumberString()
   jefatura?: string;

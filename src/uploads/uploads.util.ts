@@ -1,14 +1,16 @@
 import * as path from 'path';
 import type { Request } from 'express';
 
-export type UploadModulo = 'tareas' | 'reportes' | 'checklists';
+export type UploadModulo =
+  | 'tareas'
+  | 'reportes'
+  | 'checklists'
+  | 'carga-car-tics'
+  | 'uso-car-tics';
 
 type UploadFileInfo = { originalname?: string; mimetype?: string };
 
-type Classified =
-  | { kind: 'imagen' }
-  | { kind: 'pdf' }
-  | { kind: 'otro' };
+type Classified = { kind: 'imagen' } | { kind: 'pdf' } | { kind: 'otro' };
 
 function stripTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
@@ -32,15 +34,32 @@ function classify(file?: UploadFileInfo): Classified {
   if (mimetype === 'application/pdf' || ext === '.pdf') return { kind: 'pdf' };
 
   if (mimetype.startsWith('image/')) return { kind: 'imagen' };
-  if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.bmp'].includes(ext)) return { kind: 'imagen' };
+  if (
+    [
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.gif',
+      '.webp',
+      '.heic',
+      '.heif',
+      '.bmp',
+    ].includes(ext)
+  )
+    return { kind: 'imagen' };
 
   return { kind: 'otro' };
 }
 
-export function resolveAdjuntoRelativeDir(modulo: UploadModulo, file?: UploadFileInfo): string {
+export function resolveAdjuntoRelativeDir(
+  modulo: UploadModulo,
+  file?: UploadFileInfo,
+): string {
   const kind = classify(file);
   if (kind.kind === 'imagen') return path.join('imagenes', modulo);
   if (kind.kind === 'pdf') return path.join('documentos', modulo, 'pdfs');
+  if (modulo === 'carga-car-tics' || modulo === 'uso-car-tics')
+    return path.join('imagenes', modulo);
   return path.join('documentos', modulo, 'otros');
 }
 
@@ -49,12 +68,19 @@ export function resolveUploadsBase(req: Request): string {
   if (uploadsBaseEnv.length > 0) return stripTrailingSlashes(uploadsBaseEnv);
 
   const publicBase = (process.env.PUBLIC_BASE_URL ?? '').trim();
-  const base = publicBase.length > 0 ? stripTrailingSlashes(publicBase) : `${req.protocol}://${req.get('host')}`;
+  const base =
+    publicBase.length > 0
+      ? stripTrailingSlashes(publicBase)
+      : `${req.protocol}://${req.get('host')}`;
 
   return `${base}/uploads`;
 }
 
-export function buildPublicFileUrl(req: Request, relativeDir: string, filename: string): string {
+export function buildPublicFileUrl(
+  req: Request,
+  relativeDir: string,
+  filename: string,
+): string {
   const uploadsBase = resolveUploadsBase(req);
   const relativePosix = relativeDir.split(path.sep).join(path.posix.sep);
   const filePath = path.posix.join(relativePosix, filename);

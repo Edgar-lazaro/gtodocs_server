@@ -55,12 +55,28 @@ export class TareasController {
     return this.tareasService.findOneForUser(id, userId, req.user?.cargoId);
   }
 
-  @Post()
-  crear(@Req() req: any, @Body() dto: CreateTareaDto) {
+  @Post('estado')
+  @UseGuards(JwtGuard)
+  actualizarEstado(@Req() req: any, @Body() dto: UpdateTareaEstadoDto) {
     const userId = req.user?.sub ?? req.user?.id;
-    return this.tareasService.crear(userId, dto);
+    return this.tareasService.actualizarEstadoLegacy(
+      userId,
+      dto.id,
+      dto.estado,
+    );
   }
 
+  /** Alternativa: PATCH /api/tareas/:id/estado con body { estado } */
+  @Patch(':id/estado')
+  @UseGuards(JwtGuard)
+  actualizarEstadoPorId(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { estado: UpdateTareaEstadoDto['estado'] },
+  ) {
+    const userId = req.user?.sub ?? req.user?.id;
+    return this.tareasService.actualizarEstadoLegacy(userId, id, body.estado);
+  }
 
   @Post('comentarios')
   @UseGuards(JwtGuard)
@@ -110,7 +126,13 @@ export class TareasController {
   ) {
     const userId = req.user?.sub ?? req.user?.id;
     if (!file) {
-      return this.tareasService.adjuntarLegacy(userId, dto.tareaId, dto.tipo, dto.nombre, null);
+      return this.tareasService.adjuntarLegacy(
+        userId,
+        dto.tareaId,
+        dto.tipo,
+        dto.nombre,
+        null,
+      );
     }
 
     const relative = resolveAdjuntoRelativeDir('tareas', {
@@ -119,15 +141,19 @@ export class TareasController {
     });
 
     const url = buildPublicFileUrl(req, relative, file.filename);
-    return this.tareasService.adjuntarLegacy(userId, dto.tareaId, dto.tipo, dto.nombre, url);
+    return this.tareasService.adjuntarLegacy(
+      userId,
+      dto.tareaId,
+      dto.tipo,
+      dto.nombre,
+      url,
+    );
   }
 
-
-  @Post('estado')
-  @UseGuards(JwtGuard)
-  actualizarEstado(@Req() req: any, @Body() dto: UpdateTareaEstadoDto) {
+  @Post()
+  crear(@Req() req: any, @Body() dto: CreateTareaDto) {
     const userId = req.user?.sub ?? req.user?.id;
-    return this.tareasService.actualizarEstadoLegacy(userId, dto.id, dto.estado);
+    return this.tareasService.crear(userId, dto);
   }
 
   @Patch(':id')

@@ -130,7 +130,9 @@ export class TareasService {
   }
 
   async crear(asignadoPor: string, dto: CreateTareaDto) {
-    const usuarioAsignadoId = await this.resolveUserIdFromIdOrUsername(dto.usuario_asignado);
+    const usuarioAsignadoId = await this.resolveUserIdFromIdOrUsername(
+      dto.usuario_asignado,
+    );
 
     const legacyCreated = await this.prisma.tareas.create({
       data: {
@@ -146,7 +148,9 @@ export class TareasService {
     await this.glpiQueue.enqueueTicket({
       title: `Tarea: ${legacyCreated.titulo}`,
       description: [
-        legacyCreated.descripcion ? `descripcion: ${legacyCreated.descripcion}` : 'descripcion: (sin descripcion)',
+        legacyCreated.descripcion
+          ? `descripcion: ${legacyCreated.descripcion}`
+          : 'descripcion: (sin descripcion)',
         `tarea_id: ${legacyCreated.id.toString()}`,
         `estatus: ${legacyCreated.estatus}`,
         `asignado_por: ${legacyCreated.asignado_por}`,
@@ -189,7 +193,10 @@ export class TareasService {
       const updated = await this.prisma.tareas.update({ where: { id }, data });
       return serializeBigInt(updated);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -208,14 +215,21 @@ export class TareasService {
       const deleted = await this.prisma.tareas.delete({ where: { id } });
       return serializeBigInt(deleted);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
     }
   }
 
-  async comentarLegacy(actorUserId: string, tareaIdRaw: string, mensaje: string) {
+  async comentarLegacy(
+    actorUserId: string,
+    tareaIdRaw: string,
+    mensaje: string,
+  ) {
     let tareaId: bigint;
     try {
       tareaId = parseBigIntId(tareaIdRaw);
@@ -234,7 +248,9 @@ export class TareasService {
       select: { id: true },
     });
     if (!usuario) {
-      throw new BadRequestException(`usuario no existe en User.id: ${actorUserId}`);
+      throw new BadRequestException(
+        `usuario no existe en User.id: ${actorUserId}`,
+      );
     }
 
     const created = await this.prisma.tarea_avances.create({
@@ -274,7 +290,9 @@ export class TareasService {
       select: { id: true },
     });
     if (!usuario) {
-      throw new BadRequestException(`usuario no existe en User.id: ${actorUserId}`);
+      throw new BadRequestException(
+        `usuario no existe en User.id: ${actorUserId}`,
+      );
     }
 
     const created = await this.prisma.tarea_avances.create({
@@ -289,7 +307,11 @@ export class TareasService {
     return serializeBigInt(created);
   }
 
-  async actualizarEstadoLegacy(actorUserId: string, idRaw: string, estadoRaw: string) {
+  async actualizarEstadoLegacy(
+    actorUserId: string,
+    idRaw: string,
+    estadoRaw: string,
+  ) {
     let id: bigint;
     try {
       id = parseBigIntId(idRaw);
@@ -299,13 +321,15 @@ export class TareasService {
 
     const estado = this.normalizeEstado(estadoRaw);
 
-  
     const tarea = await this.prisma.tareas.findUnique({
       where: { id },
       select: { id: true, usuario_asignado: true, asignado_por: true },
     });
     if (!tarea) throw new NotFoundException('Not found');
-    if (tarea.usuario_asignado !== actorUserId && tarea.asignado_por !== actorUserId) {
+    if (
+      tarea.usuario_asignado !== actorUserId &&
+      tarea.asignado_por !== actorUserId
+    ) {
       throw new BadRequestException('No autorizado para cambiar estado');
     }
 

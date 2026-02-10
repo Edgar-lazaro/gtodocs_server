@@ -31,11 +31,15 @@ export class AuthService {
               // intentar buscar de nuevo
               user = await this.repo.findUserByUsername(username);
               if (!user) {
-                throw new UnauthorizedException('Error al crear usuario desde Active Directory');
+                throw new UnauthorizedException(
+                  'Error al crear usuario desde Active Directory',
+                );
               }
             }
           } else {
-            throw new UnauthorizedException('No se pudo obtener información del usuario desde Active Directory');
+            throw new UnauthorizedException(
+              'No se pudo obtener información del usuario desde Active Directory',
+            );
           }
         }
       }

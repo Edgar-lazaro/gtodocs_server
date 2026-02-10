@@ -12,24 +12,28 @@ export class SyncService {
     }
 
     try {
-      await this.prisma.$transaction(async tx => {
+      await this.prisma.$transaction(async (tx) => {
         for (const item of payload) {
           if (!item || typeof item !== 'object') {
             throw new BadRequestException('Item inválido en payload');
           }
           if (!item.entidad || !item.payload) {
-            throw new BadRequestException('Cada item debe incluir entidad y payload');
+            throw new BadRequestException(
+              'Cada item debe incluir entidad y payload',
+            );
           }
 
-          const entidadId = typeof item.entidadId === 'string' ? item.entidadId : '';
-          const accion = typeof item.accion === 'string' ? item.accion : 'upsert';
+          const entidadId =
+            typeof item.entidadId === 'string' ? item.entidadId : '';
+          const accion =
+            typeof item.accion === 'string' ? item.accion : 'upsert';
 
           await tx.syncQueue.create({
             data: {
               entidad: String(item.entidad),
               entidadId,
               accion,
-              payload: item.payload as any,
+              payload: item.payload,
               status: 'pending',
               procesado: false,
             },

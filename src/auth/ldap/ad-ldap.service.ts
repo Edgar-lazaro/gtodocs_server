@@ -28,7 +28,9 @@ export class AdLdapService {
   constructor(private readonly config: ConfigService) {}
 
   isEnabled(): boolean {
-    return (this.config.get<string>('AD_ENABLED') ?? '').toLowerCase() === 'true';
+    return (
+      (this.config.get<string>('AD_ENABLED') ?? '').toLowerCase() === 'true'
+    );
   }
 
   private createClient() {
@@ -37,18 +39,26 @@ export class AdLdapService {
       throw new Error('AD_URL is not configured');
     }
 
-    const rejectUnauthorizedRaw = (this.config.get<string>('AD_TLS_REJECT_UNAUTHORIZED') ?? 'true').toLowerCase();
+    const rejectUnauthorizedRaw = (
+      this.config.get<string>('AD_TLS_REJECT_UNAUTHORIZED') ?? 'true'
+    ).toLowerCase();
     const rejectUnauthorized = rejectUnauthorizedRaw !== 'false';
 
     return ldap.createClient({
       url,
       timeout: Number(this.config.get<string>('AD_TIMEOUT_MS') ?? 8000),
-      connectTimeout: Number(this.config.get<string>('AD_CONNECT_TIMEOUT_MS') ?? 8000),
+      connectTimeout: Number(
+        this.config.get<string>('AD_CONNECT_TIMEOUT_MS') ?? 8000,
+      ),
       tlsOptions: { rejectUnauthorized },
     });
   }
 
-  private bind(client: ldap.Client, dn: string, password: string): Promise<void> {
+  private bind(
+    client: ldap.Client,
+    dn: string,
+    password: string,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       client.bind(dn, password, (err) => {
         if (err) return reject(err);
@@ -65,7 +75,11 @@ export class AdLdapService {
     }
   }
 
-  private searchFirstDn(client: ldap.Client, baseDn: string, username: string): Promise<string | null> {
+  private searchFirstDn(
+    client: ldap.Client,
+    baseDn: string,
+    username: string,
+  ): Promise<string | null> {
     const filter = `(&(objectClass=user)(sAMAccountName=${escapeLdapFilter(username)}))`;
 
     return new Promise((resolve, reject) => {
@@ -84,7 +98,9 @@ export class AdLdapService {
           let found: string | null = null;
 
           res.on('searchEntry', (entry) => {
-            const dn = (entry?.objectName as unknown as string) ?? (entry?.dn as unknown as string);
+            const dn =
+              (entry?.objectName as unknown as string) ??
+              (entry?.dn as unknown as string);
             if (dn && !found) found = dn;
           });
           res.on('error', (e) => reject(e));
@@ -94,7 +110,11 @@ export class AdLdapService {
     });
   }
 
-  private searchUserInfo(client: ldap.Client, baseDn: string, username: string): Promise<{
+  private searchUserInfo(
+    client: ldap.Client,
+    baseDn: string,
+    username: string,
+  ): Promise<{
     dn: string;
     cn?: string;
     displayName?: string;
@@ -127,11 +147,15 @@ export class AdLdapService {
           } | null = null;
 
           res.on('searchEntry', (entry) => {
-            const dn = (entry?.objectName as unknown as string) ?? (entry?.dn as unknown as string);
+            const dn =
+              (entry?.objectName as unknown as string) ??
+              (entry?.dn as unknown as string);
             if (dn && !found) {
               const attrs = entry.attributes || [];
               const getAttr = (name: string): string | undefined => {
-                const attr = attrs.find((a: any) => a.type === name || a._name === name);
+                const attr = attrs.find(
+                  (a: any) => a.type === name || a._name === name,
+                );
                 if (!attr) return undefined;
                 const values = attr.values || [];
                 return values.length > 0 ? String(values[0]) : undefined;
@@ -163,11 +187,16 @@ export class AdLdapService {
     if (!username) return null;
 
     const baseDn = (this.config.get<string>('AD_BASE_DN') ?? '').trim();
-    const serviceBindDn = (this.config.get<string>('AD_SERVICE_BIND_DN') ?? '').trim();
-    const serviceBindPassword = this.config.get<string>('AD_SERVICE_BIND_PASSWORD') ?? '';
+    const serviceBindDn = (
+      this.config.get<string>('AD_SERVICE_BIND_DN') ?? ''
+    ).trim();
+    const serviceBindPassword =
+      this.config.get<string>('AD_SERVICE_BIND_PASSWORD') ?? '';
 
     if (!baseDn || !serviceBindDn || !serviceBindPassword) {
-      this.logger.warn('Cannot get user info from AD: AD_BASE_DN, AD_SERVICE_BIND_DN, and AD_SERVICE_BIND_PASSWORD are required');
+      this.logger.warn(
+        'Cannot get user info from AD: AD_BASE_DN, AD_SERVICE_BIND_DN, and AD_SERVICE_BIND_PASSWORD are required',
+      );
       return null;
     }
 
@@ -179,7 +208,8 @@ export class AdLdapService {
       if (!userInfo) return null;
 
       // Construir nombre completo: displayName > cn > givenName
-      let nombre = userInfo.displayName || userInfo.cn || userInfo.givenName || username;
+      let nombre =
+        userInfo.displayName || userInfo.cn || userInfo.givenName || username;
       const apellido = userInfo.sn || null;
 
       // Si tenemos givenName pero no displayName/cn, usar givenName como nombre
@@ -188,7 +218,9 @@ export class AdLdapService {
       }
 
       // Email es requerido, usar uno por defecto si no está disponible
-      const email = userInfo.mail || `${username}@${this.config.get<string>('AD_UPN_SUFFIX') || 'example.com'}`;
+      const email =
+        userInfo.mail ||
+        `${username}@${this.config.get<string>('AD_UPN_SUFFIX') || 'example.com'}`;
 
       return {
         nombre: nombre.trim(),
@@ -196,7 +228,9 @@ export class AdLdapService {
         email: email.trim(),
       };
     } catch (err: any) {
-      this.logger.debug(`Failed to get user info from AD: ${err?.message ?? err}`);
+      this.logger.debug(
+        `Failed to get user info from AD: ${err?.message ?? err}`,
+      );
       return null;
     } finally {
       this.unbindQuietly(client);
@@ -206,7 +240,9 @@ export class AdLdapService {
   private buildBindCandidates(username: string): string[] {
     const candidates: string[] = [];
 
-    const template = (this.config.get<string>('AD_BIND_DN_TEMPLATE') ?? '').trim();
+    const template = (
+      this.config.get<string>('AD_BIND_DN_TEMPLATE') ?? ''
+    ).trim();
     if (template) {
       candidates.push(template.replace(/%u/g, username));
     }
@@ -224,13 +260,19 @@ export class AdLdapService {
     return candidates;
   }
 
-  async validateCredentials(username: string, password: string): Promise<boolean> {
+  async validateCredentials(
+    username: string,
+    password: string,
+  ): Promise<boolean> {
     if (!this.isEnabled()) return false;
     if (!username || !password) return false;
 
     const baseDn = (this.config.get<string>('AD_BASE_DN') ?? '').trim();
-    const serviceBindDn = (this.config.get<string>('AD_SERVICE_BIND_DN') ?? '').trim();
-    const serviceBindPassword = this.config.get<string>('AD_SERVICE_BIND_PASSWORD') ?? '';
+    const serviceBindDn = (
+      this.config.get<string>('AD_SERVICE_BIND_DN') ?? ''
+    ).trim();
+    const serviceBindPassword =
+      this.config.get<string>('AD_SERVICE_BIND_PASSWORD') ?? '';
 
     // Preferred: service bind + search DN + user bind
     if (baseDn && serviceBindDn && serviceBindPassword) {
@@ -244,7 +286,9 @@ export class AdLdapService {
         await this.bind(client, userDn, password);
         return true;
       } catch (err: any) {
-        this.logger.debug(`AD validate failed (service+search): ${err?.message ?? err}`);
+        this.logger.debug(
+          `AD validate failed (service+search): ${err?.message ?? err}`,
+        );
         return false;
       } finally {
         this.unbindQuietly(client);
@@ -254,7 +298,9 @@ export class AdLdapService {
     // Fallback: direct bind formats (UPN / DOMAIN\\user / template)
     const candidates = this.buildBindCandidates(username);
     if (candidates.length === 0) {
-      this.logger.warn('AD_ENABLED=true but no bind method configured (set AD_BASE_DN+AD_SERVICE_BIND_* or AD_UPN_SUFFIX/AD_DOMAIN/AD_BIND_DN_TEMPLATE)');
+      this.logger.warn(
+        'AD_ENABLED=true but no bind method configured (set AD_BASE_DN+AD_SERVICE_BIND_* or AD_UPN_SUFFIX/AD_DOMAIN/AD_BIND_DN_TEMPLATE)',
+      );
       return false;
     }
 

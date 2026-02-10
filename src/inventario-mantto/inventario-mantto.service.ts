@@ -14,7 +14,9 @@ export class InventarioManttoService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll() {
-    const rows = await this.prisma.inventario_mantto.findMany({ orderBy: { id: 'desc' } });
+    const rows = await this.prisma.inventario_mantto.findMany({
+      orderBy: { id: 'desc' },
+    });
     return serializeBigInt(rows);
   }
 
@@ -26,7 +28,9 @@ export class InventarioManttoService {
       throw new BadRequestException('Invalid id');
     }
 
-    const row = await this.prisma.inventario_mantto.findUnique({ where: { id } });
+    const row = await this.prisma.inventario_mantto.findUnique({
+      where: { id },
+    });
     if (!row) throw new NotFoundException('Not found');
     return serializeBigInt(row);
   }
@@ -37,7 +41,8 @@ export class InventarioManttoService {
         where: { id: dto.gerencia },
         select: { id: true },
       });
-      if (!g) throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
+      if (!g)
+        throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
     }
 
     if (dto.jefatura !== undefined) {
@@ -46,7 +51,8 @@ export class InventarioManttoService {
         where: { id: jid },
         select: { id: true },
       });
-      if (!j) throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
+      if (!j)
+        throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
     }
 
     const created = await this.prisma.inventario_mantto.create({
@@ -59,8 +65,14 @@ export class InventarioManttoService {
         estado: dto.estado,
         ubicacion: dto.ubicacion,
         img: dto.img,
-        gerencias: dto.gerencia !== undefined ? { connect: { id: dto.gerencia } } : undefined,
-        jefaturas: dto.jefatura !== undefined ? { connect: { id: BigInt(dto.jefatura) } } : undefined,
+        gerencias:
+          dto.gerencia !== undefined
+            ? { connect: { id: dto.gerencia } }
+            : undefined,
+        jefaturas:
+          dto.jefatura !== undefined
+            ? { connect: { id: BigInt(dto.jefatura) } }
+            : undefined,
       },
     });
 
@@ -80,7 +92,8 @@ export class InventarioManttoService {
         where: { id: dto.gerencia },
         select: { id: true },
       });
-      if (!g) throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
+      if (!g)
+        throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
     }
 
     if (dto.jefatura !== undefined) {
@@ -89,7 +102,8 @@ export class InventarioManttoService {
         where: { id: jid },
         select: { id: true },
       });
-      if (!j) throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
+      if (!j)
+        throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
     }
 
     const data: any = {
@@ -101,15 +115,27 @@ export class InventarioManttoService {
       estado: dto.estado,
       ubicacion: dto.ubicacion,
       img: dto.img,
-      gerencias: dto.gerencia !== undefined ? { connect: { id: dto.gerencia } } : undefined,
-      jefaturas: dto.jefatura !== undefined ? { connect: { id: BigInt(dto.jefatura) } } : undefined,
+      gerencias:
+        dto.gerencia !== undefined
+          ? { connect: { id: dto.gerencia } }
+          : undefined,
+      jefaturas:
+        dto.jefatura !== undefined
+          ? { connect: { id: BigInt(dto.jefatura) } }
+          : undefined,
     };
 
     try {
-      const updated = await this.prisma.inventario_mantto.update({ where: { id }, data });
+      const updated = await this.prisma.inventario_mantto.update({
+        where: { id },
+        data,
+      });
       return serializeBigInt(updated);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -125,10 +151,15 @@ export class InventarioManttoService {
     }
 
     try {
-      const deleted = await this.prisma.inventario_mantto.delete({ where: { id } });
+      const deleted = await this.prisma.inventario_mantto.delete({
+        where: { id },
+      });
       return serializeBigInt(deleted);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;

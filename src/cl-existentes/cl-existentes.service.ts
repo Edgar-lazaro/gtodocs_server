@@ -24,7 +24,10 @@ export class ClExistentesService {
       }
     }
 
-    const rows = await this.prisma.cl_existentes.findMany({ where, orderBy: { id: 'desc' } });
+    const rows = await this.prisma.cl_existentes.findMany({
+      where,
+      orderBy: { id: 'desc' },
+    });
     return serializeBigInt(rows);
   }
 
@@ -42,12 +45,20 @@ export class ClExistentesService {
   }
 
   async create(dto: CreateClExistenteDto) {
-    const gerencia = await this.prisma.gerencias.findUnique({ where: { id: dto.gerencia }, select: { id: true } });
-    if (!gerencia) throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
+    const gerencia = await this.prisma.gerencias.findUnique({
+      where: { id: dto.gerencia },
+      select: { id: true },
+    });
+    if (!gerencia)
+      throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
 
     const jefaturaId = BigInt(dto.jefatura);
-    const jefatura = await this.prisma.jefaturas.findUnique({ where: { id: jefaturaId }, select: { id: true } });
-    if (!jefatura) throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
+    const jefatura = await this.prisma.jefaturas.findUnique({
+      where: { id: jefaturaId },
+      select: { id: true },
+    });
+    if (!jefatura)
+      throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
 
     const created = await this.prisma.cl_existentes.create({
       data: {
@@ -70,30 +81,47 @@ export class ClExistentesService {
     }
 
     if (dto.gerencia !== undefined) {
-      const gerencia = await this.prisma.gerencias.findUnique({ where: { id: dto.gerencia }, select: { id: true } });
-      if (!gerencia) throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
+      const gerencia = await this.prisma.gerencias.findUnique({
+        where: { id: dto.gerencia },
+        select: { id: true },
+      });
+      if (!gerencia)
+        throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
     }
 
     let connectJefatura: any = undefined;
     if (dto.jefatura !== undefined) {
       const jefaturaId = BigInt(dto.jefatura);
-      const jefatura = await this.prisma.jefaturas.findUnique({ where: { id: jefaturaId }, select: { id: true } });
-      if (!jefatura) throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
+      const jefatura = await this.prisma.jefaturas.findUnique({
+        where: { id: jefaturaId },
+        select: { id: true },
+      });
+      if (!jefatura)
+        throw new BadRequestException(`jefatura no existe: ${dto.jefatura}`);
       connectJefatura = { connect: { id: jefaturaId } };
     }
 
     const data: any = {
       nombre_cl: dto.nombre_cl,
       funcion_form: dto.funcion_form,
-      gerencias: dto.gerencia !== undefined ? { connect: { id: dto.gerencia } } : undefined,
+      gerencias:
+        dto.gerencia !== undefined
+          ? { connect: { id: dto.gerencia } }
+          : undefined,
       jefaturas: connectJefatura,
     };
 
     try {
-      const updated = await this.prisma.cl_existentes.update({ where: { id }, data });
+      const updated = await this.prisma.cl_existentes.update({
+        where: { id },
+        data,
+      });
       return serializeBigInt(updated);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -112,7 +140,10 @@ export class ClExistentesService {
       const deleted = await this.prisma.cl_existentes.delete({ where: { id } });
       return serializeBigInt(deleted);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;

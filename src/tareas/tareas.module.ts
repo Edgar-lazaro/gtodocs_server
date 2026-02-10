@@ -6,11 +6,7 @@ import { AuthModule } from '../auth/auth.module';
 import { GlpiModule } from '../glpi/glpi.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    AuthModule,
-    GlpiModule,
-  ],
+  imports: [PrismaModule, AuthModule, GlpiModule],
   controllers: [TareasController],
   providers: [TareasService],
 })

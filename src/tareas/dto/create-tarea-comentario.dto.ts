@@ -1,7 +1,6 @@
 import { IsOptional, IsString } from 'class-validator';
 
 export class CreateTareaComentarioDto {
- 
   @IsOptional()
   @IsString()
   id?: string;

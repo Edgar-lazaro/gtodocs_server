@@ -36,9 +36,15 @@ export class CoreSyncQueueService {
   async update(idRaw: string, dto: UpdateCoreSyncQueueDto) {
     const id = parseIntId(idRaw);
     try {
-      return await this.prisma.syncQueue.update({ where: { id }, data: dto as any });
+      return await this.prisma.syncQueue.update({
+        where: { id },
+        data: dto as any,
+      });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -50,7 +56,10 @@ export class CoreSyncQueueService {
     try {
       return await this.prisma.syncQueue.delete({ where: { id } });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;

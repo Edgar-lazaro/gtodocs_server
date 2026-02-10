@@ -28,10 +28,6 @@ import { AdLdapService } from './ldap/ad-ldap.service';
     JwtGuard,
     CargosGuard,
   ],
-  exports: [
-    JwtModule,
-    JwtGuard,
-    CargosGuard,
-  ],
+  exports: [JwtModule, JwtGuard, CargosGuard],
 })
 export class AuthModule {}

@@ -55,18 +55,20 @@ export class JefaturasService {
     const gerenciaId = await this.resolveUserGerenciaId(user);
     if (gerenciaId === null) throw new NotFoundException('Not found');
 
-    const row = await this.prisma.jefaturas.findFirst({ where: { id, gerencia: gerenciaId } });
+    const row = await this.prisma.jefaturas.findFirst({
+      where: { id, gerencia: gerenciaId },
+    });
     if (!row) throw new NotFoundException('Not found');
     return serializeBigInt(row);
   }
 
   async create(dto: CreateJefaturaDto) {
-    
     const exists = await this.prisma.gerencias.findUnique({
       where: { id: dto.gerencia },
       select: { id: true },
     });
-    if (!exists) throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
+    if (!exists)
+      throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
 
     const created = await this.prisma.jefaturas.create({ data: dto });
     return serializeBigInt(created);
@@ -85,14 +87,21 @@ export class JefaturasService {
         where: { id: dto.gerencia },
         select: { id: true },
       });
-      if (!exists) throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
+      if (!exists)
+        throw new BadRequestException(`gerencia no existe: ${dto.gerencia}`);
     }
 
     try {
-      const updated = await this.prisma.jefaturas.update({ where: { id }, data: dto });
+      const updated = await this.prisma.jefaturas.update({
+        where: { id },
+        data: dto,
+      });
       return serializeBigInt(updated);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;
@@ -111,7 +120,10 @@ export class JefaturasService {
       const deleted = await this.prisma.jefaturas.delete({ where: { id } });
       return serializeBigInt(deleted);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
         throw new NotFoundException('Not found');
       }
       throw err;

@@ -18,7 +18,7 @@ export class UsersService {
       orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }],
     });
 
-    return rows.map(r => ({
+    return rows.map((r) => ({
       id: r.id,
       nombre: [r.nombre, r.apellido].filter(Boolean).join(' '),
     }));
