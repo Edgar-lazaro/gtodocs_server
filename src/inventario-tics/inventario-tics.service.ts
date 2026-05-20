@@ -9,9 +9,9 @@ import { parseBigIntId, serializeBigInt } from '../common/serialize-bigint';
 import { CreateInventarioTicsDto } from './dto/create-inventario-tics.dto';
 import { UpdateInventarioTicsDto } from './dto/update-inventario-tics.dto';
 
-function parseOptionalIntId(idRaw: string | undefined): number | undefined {
-  if (idRaw === undefined) return undefined;
-  const parsed = Number(idRaw);
+function parseOptionalIntId(iRaw: string | undefined): number | undefined {
+  if (iRaw === undefined) return undefined;
+  const parsed = Number(iRaw);
   if (!Number.isInteger(parsed))
     throw new BadRequestException('Invalid gerencia');
   return parsed;

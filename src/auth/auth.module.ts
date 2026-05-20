@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { AuthRepository } from './auth.repository';
@@ -11,12 +12,25 @@ import { AdLdapService } from './ldap/ad-ldap.service';
 @Module({
   imports: [
     PrismaModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'super-secret-key',
-      signOptions: {
-        expiresIn: process.env.JWT_EXPIRES_IN
-          ? (process.env.JWT_EXPIRES_IN as any)
-          : ('13h' as const),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const secret = (config.get<string>('JWT_SECRET') ?? '').trim();
+        if (!secret) {
+          throw new Error(
+            'JWT_SECRET no configurado (define JWT_SECRET en variables de entorno)',
+          );
+        }
+
+        return {
+          secret,
+          signOptions: {
+            expiresIn: config.get<string>('JWT_EXPIRES_IN')
+              ? (config.get<string>('JWT_EXPIRES_IN') as any)
+              : ('13h' as const),
+          },
+        };
       },
     }),
   ],

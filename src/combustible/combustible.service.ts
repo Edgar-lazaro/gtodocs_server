@@ -146,6 +146,32 @@ export class CombustibleService {
         } as any,
       });
 
+      // Verificar alerta de mantenimiento
+      const vehiculoInfo = dto.vehiculo
+        ? await tx.vehiculos.findUnique({
+            where: { nombre_clave: dto.vehiculo },
+          })
+        : null;
+      if (
+        vehiculoInfo?.km_ultimo_mantenimiento &&
+        vehiculoInfo?.km_mantenimiento_cada
+      ) {
+        const kmFinal = Number(dto.km_final);
+        const kmDesdeManto =
+          kmFinal - Number(vehiculoInfo.km_ultimo_mantenimiento);
+        if (kmDesdeManto >= Number(vehiculoInfo.km_mantenimiento_cada)) {
+          await tx.notificaciones.create({
+            data: {
+              usuario_id: usuario.id,
+              tipo: 'mantenimiento',
+              titulo: 'Mantenimiento requerido',
+              mensaje: `El vehículo ${vehiculoInfo.marca} ${vehiculoInfo.modelo} (${vehiculoInfo.placas}) ha alcanzado ${kmDesdeManto} km desde su último mantenimiento. Requiere servicio.`,
+              leida: false,
+            },
+          });
+        }
+      }
+
       // Per-gerencia record: insert into dynamic table declared in gerencias.uso_car (e.g. uso_car_tics)
       // We only allow known safe table names.
       if (gerenciaId && usoCarTable) {

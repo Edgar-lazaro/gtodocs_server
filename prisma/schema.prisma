@@ -260,13 +260,15 @@ model uso_car_tics {
 }
 
 model vehiculos {
-  id            BigInt   @id @default(autoincrement())
-  created_at    DateTime @default(now()) @db.Timestamptz(6)
-  marca         String
-  modelo        String
-  placas        String
-  gerencia      String   @db.VarChar
-  nombre_clave  String   @unique
+  id                     BigInt   @id @default(autoincrement())
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+  marca                  String
+  modelo                 String
+  placas                 String
+  gerencia               String   @db.VarChar
+  nombre_clave           String   @unique
+  km_ultimo_mantenimiento Decimal? @db.Decimal
+  km_mantenimiento_cada  Decimal? @db.Decimal
 
   gerenciaRef   gerencias @relation(fields: [gerencia], references: [nombre], onDelete: NoAction, onUpdate: NoAction)
   uso_car_tics  uso_car_tics[]

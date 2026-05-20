@@ -15,6 +15,16 @@ async function bootstrap() {
   const logger = new Logger('bootstrap');
   const config = app.get(ConfigService);
 
+  const requiredEnv = ['DATABASE_URL', 'JWT_SECRET'] as const;
+  const missing = requiredEnv.filter(
+    (key) => ((config.get<string>(key) ?? '').trim().length ?? 0) === 0,
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Faltan variables de entorno requeridas: ${missing.join(', ')}`,
+    );
+  }
+
   // Basic request logging (method, path, status, duration)
   app.use(
     (
@@ -115,6 +125,10 @@ async function bootstrap() {
   fs.mkdirSync(path.join(uploadsRoot, 'documentos', 'checklists', 'otros'), {
     recursive: true,
   });
+  fs.mkdirSync(
+    path.join(uploadsRoot, 'documentos', 'reportes', 'pdfs', 'combustible'),
+    { recursive: true },
+  );
   app.use('/uploads', express.static(uploadsRoot));
 
   const swaggerEnabledEnv = (

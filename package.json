@@ -7,10 +7,13 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "obfuscate": "node scripts/obfuscate-dist.cjs",
+    "obfuscate-src": "node scripts/obfuscate-src.cjs",
+    "build:prod": "npm run build && npm run obfuscate",
     "prisma:generate": "prisma generate",
     "start:dev": "(lsof -tiTCP:3000 -sTCP:LISTEN | xargs -r kill -9) || true; nest start --watch",
     "start": "((lsof -tiTCP:${PORT:-3000} -sTCP:LISTEN | xargs -r kill -9) || true) && node dist/main.js",
-    "start:prod": "npm run build && ((lsof -tiTCP:${PORT:-3000} -sTCP:LISTEN | xargs -r kill -9) || true) && node dist/main.js",
+    "start:prod": "npm run build:prod && ((lsof -tiTCP:${PORT:-3000} -sTCP:LISTEN | xargs -r kill -9) || true) && node dist/main.js",
     "seed:dummy": "ts-node scripts/seed-dummy.ts",
     "seed:auxiliar": "ts-node scripts/seed-auxiliar.ts",
     "set-password": "ts-node scripts/set-user-password.ts",
@@ -22,7 +25,9 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:postman": "node scripts/run-postman.mjs",
-    "test:postman:health": "node scripts/run-postman.mjs --folder=00-Health"
+    "test:postman:health": "node scripts/run-postman.mjs --folder=00-Health",
+    "release:push": "node scripts/prepare-release-repo.cjs",
+    "release:push:gto_dosc": "RELEASE_REPO_URL=https://github.com/Edgar-lazaro/gto_dosc_backend.git node scripts/prepare-release-repo.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -44,6 +49,7 @@
     "ldapjs": "^3.0.7",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "pdfkit": "^0.18.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1"
@@ -59,11 +65,13 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
     "@types/passport-jwt": "^4.0.1",
+    "@types/pdfkit": "^0.17.6",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
     "globals": "^16.0.0",
+    "javascript-obfuscator": "^4.2.2",
     "jest": "^30.0.0",
     "newman": "^6.2.1",
     "prettier": "^3.4.2",
