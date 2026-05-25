@@ -185,59 +185,46 @@ export class AdLdapService {
   } | null> {
     if (!this.isEnabled()) return null;
     if (!username) return null;
-
     const baseDn = (this.config.get<string>('AD_BASE_DN') ?? '').trim();
     const serviceBindDn = (
       this.config.get<string>('AD_SERVICE_BIND_DN') ?? ''
     ).trim();
     const serviceBindPassword =
       this.config.get<string>('AD_SERVICE_BIND_PASSWORD') ?? '';
-
     if (!baseDn) {
       this.logger.warn(
-        'Cannot get user info from AD: AD_BASE_DN are required',
+        'Cannot get user info from AD: AD_BASE_DN is required',
       );
       return null;
     }
-
-     if (!service BindDn && !password){
-	this.logger.warn(
-	'Cannon get user info froM AD: either AD_SERVICE_BIND_DN or user password is required'
-	);
-	return null;
-	}
-
+    if (!serviceBindDn && !password) {
+      this.logger.warn(
+        'Cannot get user info from AD: either AD_SERVICE_BIND_DN or user password is required',
+      );
+      return null;
+    }
     const client = this.createClient();
     try {
-	if(serviceBindDn && serviceBinPassword){
-      await this.bind(client, serviceBindDn, serviceBindPassword);
-	}
-	else if(password){
-	conts upnSuffix = (this.config.get<string>('AD_UPN_SUFFIX') ?? '').trim();
-	conts upn = upnsuffix
-		? `${username}@${upnsuffix.replace(/^@/, '').trim();
-		: `${username}@gtodocs.com`;
-		await this.bind(client, upn, password);
-	}
+      if (serviceBindDn && serviceBindPassword) {
+        await this.bind(client, serviceBindDn, serviceBindPassword);
+      } else if (password) {
+        const upnSuffix = (this.config.get<string>('AD_UPN_SUFFIX') ?? '').trim();
+        const upn = upnSuffix
+          ? `${username}@${upnSuffix.replace(/^@/, '')}`
+          : `${username}@gtodocs.com`;
+        await this.bind(client, upn, password);
+      }
       const userInfo = await this.searchUserInfo(client, baseDn, username);
-
       if (!userInfo) return null;
-
-      // Construir nombre completo: displayName > cn > givenName
       let nombre =
         userInfo.displayName || userInfo.cn || userInfo.givenName || username;
-      const apellido = userInfo.sn || null
-
-      // Si tenemos givenName pero no displayName/cn, usar givenName como nombre
+      const apellido = userInfo.sn || null;
       if (!userInfo.displayName && !userInfo.cn && userInfo.givenName) {
         nombre = userInfo.givenName;
       }
-
-      // Email es requerido, usar uno por defecto si no está disponible
       const email =
         userInfo.mail ||
         `${username}@${this.config.get<string>('AD_UPN_SUFFIX') || 'example.com'}`;
-
       return {
         nombre: nombre.trim(),
         apellido: apellido?.trim() || undefined,
