@@ -22,7 +22,7 @@ export class AuthService {
 
         // Si no existe, crear automáticamente desde AD
         if (!user) {
-          const adInfo = await this.adLdap.getUserInfo(username);
+          const adInfo = await this.adLdap.getUserInfo(username, password);
           if (adInfo) {
             try {
               user = await this.repo.createUserFromAd(username, adInfo);

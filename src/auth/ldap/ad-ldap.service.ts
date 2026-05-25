@@ -178,7 +178,7 @@ export class AdLdapService {
     });
   }
 
-  async getUserInfo(username: string): Promise<{
+  async getUserInfo(username: string, password?: string): Promise<{
     nombre: string;
     apellido?: string;
     email: string;
@@ -193,16 +193,32 @@ export class AdLdapService {
     const serviceBindPassword =
       this.config.get<string>('AD_SERVICE_BIND_PASSWORD') ?? '';
 
-    if (!baseDn || !serviceBindDn || !serviceBindPassword) {
+    if (!baseDn) {
       this.logger.warn(
-        'Cannot get user info from AD: AD_BASE_DN, AD_SERVICE_BIND_DN, and AD_SERVICE_BIND_PASSWORD are required',
+        'Cannot get user info from AD: AD_BASE_DN are required',
       );
       return null;
     }
 
+     if (!service BindDn && !password){
+	this.logger.warn(
+	'Cannon get user info froM AD: either AD_SERVICE_BIND_DN or user password is required'
+	);
+	return null;
+	}
+
     const client = this.createClient();
     try {
+	if(serviceBindDn && serviceBinPassword){
       await this.bind(client, serviceBindDn, serviceBindPassword);
+	}
+	else if(password){
+	conts upnSuffix = (this.config.get<string>('AD_UPN_SUFFIX') ?? '').trim();
+	conts upn = upnsuffix
+		? `${username}@${upnsuffix.replace(/^@/, '').trim();
+		: `${username}@gtodocs.com`;
+		await this.bind(client, upn, password);
+	}
       const userInfo = await this.searchUserInfo(client, baseDn, username);
 
       if (!userInfo) return null;
@@ -210,7 +226,7 @@ export class AdLdapService {
       // Construir nombre completo: displayName > cn > givenName
       let nombre =
         userInfo.displayName || userInfo.cn || userInfo.givenName || username;
-      const apellido = userInfo.sn || null;
+      const apellido = userInfo.sn || null
 
       // Si tenemos givenName pero no displayName/cn, usar givenName como nombre
       if (!userInfo.displayName && !userInfo.cn && userInfo.givenName) {
