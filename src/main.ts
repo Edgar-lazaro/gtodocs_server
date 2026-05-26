@@ -68,6 +68,9 @@ async function bootstrap() {
     app.use(
       helmet({
         crossOriginResourcePolicy: false,
+        // Swagger UI injects inline assets that are blocked by Helmet's default
+        // CSP in some mobile browsers, resulting in a blank page.
+        contentSecurityPolicy: false,
       }),
     );
   }
