@@ -140,6 +140,19 @@ async function bootstrap() {
   const swaggerEnabled =
     swaggerEnabledEnv === '' ? true : swaggerEnabledEnv === 'true';
   if (swaggerEnabled) {
+    app.use('/api/docs', (_req, res, next) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      next();
+    });
+    app.use('/api/docs-json', (_req, res, next) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      next();
+    });
+
     const swaggerConfig = new DocumentBuilder()
       .setTitle('GTO Docs API')
       .setDescription('Intranet API')
