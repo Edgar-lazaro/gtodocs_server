@@ -279,14 +279,21 @@ export class AdLdapService {
 
     // Preferred: service bind + search DN + user bind
     if (baseDn && serviceBindDn && serviceBindPassword) {
-      const client = this.createClient();
+      const serviceClient = this.createClient();
       try {
-        await this.bind(client, serviceBindDn, serviceBindPassword);
-        const userDn = await this.searchFirstDn(client, baseDn, username);
+        await this.bind(serviceClient, serviceBindDn, serviceBindPassword);
+        const userDn = await this.searchFirstDn(serviceClient, baseDn, username);
         if (!userDn) return false;
 
-        // Re-bind as the user to verify password
-        await this.bind(client, userDn, password);
+        // Verify the user password with a fresh LDAP connection instead of
+        // rebinding the service client.
+        const userClient = this.createClient();
+        try {
+          await this.bind(userClient, userDn, password);
+        } finally {
+          this.unbindQuietly(userClient);
+        }
+
         return true;
       } catch (err: any) {
         this.logger.debug(
@@ -294,7 +301,7 @@ export class AdLdapService {
         );
         return false;
       } finally {
-        this.unbindQuietly(client);
+        this.unbindQuietly(serviceClient);
       }
     }
 
