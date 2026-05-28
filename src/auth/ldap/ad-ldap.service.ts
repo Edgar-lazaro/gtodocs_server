@@ -272,7 +272,9 @@ export class AdLdapService {
       candidates.push(`${domain}\\${username}`);
     }
 
-    return candidates;
+    candidates.push(username);
+
+    return [...new Set(candidates.filter((value) => value.trim().length > 0))];
   }
 
   async validateCredentials(
@@ -335,6 +337,30 @@ export class AdLdapService {
         this.logger.debug(`AD bind failed for '${dn}': ${err?.message ?? err}`);
       } finally {
         this.unbindQuietly(client);
+      }
+    }
+
+    // Last resort: if anonymous search is allowed, resolve the real DN and
+    // verify the password with that DN.
+    if (baseDn) {
+      const searchClient = this.createClient();
+      try {
+        const userDn = await this.searchFirstDn(searchClient, baseDn, username);
+        if (userDn) {
+          const userClient = this.createClient();
+          try {
+            await this.bind(userClient, userDn, password);
+            return true;
+          } finally {
+            this.unbindQuietly(userClient);
+          }
+        }
+      } catch (err: any) {
+        this.logger.debug(
+          `AD anonymous search/bind fallback failed: ${err?.message ?? err}`,
+        );
+      } finally {
+        this.unbindQuietly(searchClient);
       }
     }
 
