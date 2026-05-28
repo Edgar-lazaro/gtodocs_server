@@ -27,6 +27,25 @@ export class AdLdapService {
 
   constructor(private readonly config: ConfigService) {}
 
+  private getOperationTimeoutMs(): number {
+    return Number(this.config.get<string>('AD_TIMEOUT_MS') ?? 8000);
+  }
+
+  private withTimeout<T>(promise: Promise<T>, context: string): Promise<T> {
+    const timeoutMs = this.getOperationTimeoutMs();
+    let timer: NodeJS.Timeout | null = null;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`${context} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+      if (timer) clearTimeout(timer);
+    }) as Promise<T>;
+  }
+
   isEnabled(): boolean {
     return (
       (this.config.get<string>('AD_ENABLED') ?? '').toLowerCase() === 'true'
@@ -71,12 +90,15 @@ export class AdLdapService {
     dn: string,
     password: string,
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      client.bind(dn, password, (err) => {
-        if (err) return reject(err);
-        resolve();
-      });
-    });
+    return this.withTimeout(
+      new Promise((resolve, reject) => {
+        client.bind(dn, password, (err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      }),
+      `LDAP bind for '${dn}'`,
+    );
   }
 
   private unbindQuietly(client: ldap.Client) {
@@ -94,10 +116,11 @@ export class AdLdapService {
   ): Promise<string | null> {
     const filter = `(&(objectClass=user)(sAMAccountName=${escapeLdapFilter(username)}))`;
 
-    return new Promise((resolve, reject) => {
-      client.search(
-        baseDn,
-        {
+    return this.withTimeout(
+      new Promise((resolve, reject) => {
+        client.search(
+          baseDn,
+          {
           scope: 'sub',
           filter,
           paged: false,
@@ -119,7 +142,9 @@ export class AdLdapService {
           res.on('end', () => resolve(found));
         },
       );
-    });
+      }),
+      `LDAP searchFirstDn for '${username}'`,
+    );
   }
 
   private searchUserInfo(
@@ -136,10 +161,11 @@ export class AdLdapService {
   } | null> {
     const filter = `(&(objectClass=user)(sAMAccountName=${escapeLdapFilter(username)}))`;
 
-    return new Promise((resolve, reject) => {
-      client.search(
-        baseDn,
-        {
+    return this.withTimeout(
+      new Promise((resolve, reject) => {
+        client.search(
+          baseDn,
+          {
           scope: 'sub',
           filter,
           paged: false,
@@ -187,7 +213,9 @@ export class AdLdapService {
           res.on('end', () => resolve(found));
         },
       );
-    });
+      }),
+      `LDAP searchUserInfo for '${username}'`,
+    );
   }
 
   async getUserInfo(username: string, password?: string): Promise<{
