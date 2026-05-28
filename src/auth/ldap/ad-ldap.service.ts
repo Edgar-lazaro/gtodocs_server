@@ -44,7 +44,7 @@ export class AdLdapService {
     ).toLowerCase();
     const rejectUnauthorized = rejectUnauthorizedRaw !== 'false';
 
-    return ldap.createClient({
+    const client = ldap.createClient({
       url,
       timeout: Number(this.config.get<string>('AD_TIMEOUT_MS') ?? 8000),
       connectTimeout: Number(
@@ -52,6 +52,18 @@ export class AdLdapService {
       ),
       tlsOptions: { rejectUnauthorized },
     });
+
+    // ldapjs may emit socket/client errors outside the bind/search callbacks.
+    // If unhandled, Node can terminate the process and the HTTP client sees an
+    // empty reply instead of a JSON error response.
+    client.on('error', (err: any) => {
+      this.logger.debug(`AD client error: ${err?.message ?? err}`);
+    });
+    client.on('connectError', (err: any) => {
+      this.logger.debug(`AD connect error: ${err?.message ?? err}`);
+    });
+
+    return client;
   }
 
   private bind(
