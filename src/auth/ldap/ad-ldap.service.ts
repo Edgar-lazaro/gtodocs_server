@@ -21,6 +21,19 @@ function escapeLdapFilter(value: string): string {
   });
 }
 
+function normalizeDn(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value && typeof (value as { toString?: () => string }).toString === 'function') {
+    const normalized = (value as { toString: () => string }).toString();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  return null;
+}
+
 @Injectable()
 export class AdLdapService {
   private readonly logger = new Logger(AdLdapService.name);
@@ -133,9 +146,7 @@ export class AdLdapService {
           let found: string | null = null;
 
           res.on('searchEntry', (entry) => {
-            const dn =
-              (entry?.objectName as unknown as string) ??
-              (entry?.dn as unknown as string);
+            const dn = normalizeDn(entry?.objectName) ?? normalizeDn(entry?.dn);
             if (dn && !found) found = dn;
           });
           res.on('error', (e) => reject(e));
@@ -185,9 +196,7 @@ export class AdLdapService {
           } | null = null;
 
           res.on('searchEntry', (entry) => {
-            const dn =
-              (entry?.objectName as unknown as string) ??
-              (entry?.dn as unknown as string);
+            const dn = normalizeDn(entry?.objectName) ?? normalizeDn(entry?.dn);
             if (dn && !found) {
               const attrs = entry.attributes || [];
               const getAttr = (name: string): string | undefined => {
