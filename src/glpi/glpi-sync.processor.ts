@@ -6,6 +6,7 @@ type GlpiTicketJobPayload = {
   title?: string;
   description?: string;
   assignedUserId?: string;
+  requesterUserId?: string;
   source?: {
     entity?: string;
     id?: string;
@@ -22,6 +23,45 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly glpiService: GlpiService,
   ) {}
+
+  private async findBackendUsernameById(userId?: string): Promise<string | null> {
+    const raw = String(userId ?? '').trim();
+    if (!raw) return null;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: raw },
+      select: { username: true },
+    });
+    return user?.username?.trim() || null;
+  }
+
+  private async findGlpiUserIdByName(username?: string | null): Promise<number | null> {
+    const value = String(username ?? '').trim();
+    if (!value) return null;
+
+    try {
+      const users = await this.glpiService.listUsersByName(value);
+      const exact = users.find((user) => {
+        const name = String(user?.name ?? '').trim().toLowerCase();
+        const alt = String(user?.realname ?? '').trim().toLowerCase();
+        const needle = value.toLowerCase();
+        return name === needle || alt === needle;
+      });
+
+      const match = exact ?? users[0];
+      if (!match || match.id == null) return null;
+
+      const id = Number(match.id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      this.logger.warn(
+        `GLPI user lookup failed for '${value}': ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
+    }
+  }
 
   onModuleInit() {
     const intervalMs = Number(process.env.GLPI_SYNC_INTERVAL_MS ?? 5000);
@@ -44,12 +84,31 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private buildTicketInput(payload: GlpiTicketJobPayload) {
+  private async buildTicketInput(payload: GlpiTicketJobPayload) {
+    const [requesterUsername, assignedUsername] = await Promise.all([
+      this.findBackendUsernameById(payload.requesterUserId),
+      this.findBackendUsernameById(payload.assignedUserId),
+    ]);
+
+    const [requesterGlpiId, assignedGlpiId] = await Promise.all([
+      this.findGlpiUserIdByName(requesterUsername),
+      this.findGlpiUserIdByName(assignedUsername),
+    ]);
+
+    const input: Record<string, unknown> = {
+      name: payload.title?.trim() || 'Ticket generado desde GTO Docs',
+      content: payload.description?.trim() || 'Sin descripcion',
+    };
+
+    if (requesterGlpiId) {
+      input._users_id_requester = requesterGlpiId;
+    }
+    if (assignedGlpiId) {
+      input._users_id_assign = assignedGlpiId;
+    }
+
     return {
-      input: {
-        name: payload.title?.trim() || 'Ticket generado desde GTO Docs',
-        content: payload.description?.trim() || 'Sin descripcion',
-      },
+      input,
     };
   }
 
@@ -81,8 +140,9 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
         const payload = (job.payload ?? {}) as GlpiTicketJobPayload;
 
         try {
+          const ticketInput = await this.buildTicketInput(payload);
           const response = await this.glpiService.crearTicket(
-            this.buildTicketInput(payload),
+            ticketInput,
           );
           const responseData = response?.data;
           const ticketId =

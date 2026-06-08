@@ -136,6 +136,7 @@ export class DocumentosPdfService {
         `url: ${created.url_storage}`,
       ].join('\n'),
       assignedUserId: created.usuario_id,
+      requesterUserId: created.usuario_id,
       source: { entity: 'documentos_pdf', id: created.id.toString() },
     });
 

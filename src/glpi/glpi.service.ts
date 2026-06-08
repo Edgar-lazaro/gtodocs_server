@@ -5,6 +5,12 @@ type GlpiInitSessionResponse = {
   session_token?: string;
 };
 
+type GlpiListUserResponse = Array<{
+  id?: number | string;
+  name?: string;
+  realname?: string;
+}>;
+
 @Injectable()
 export class GlpiService {
   private baseUrl = (process.env.GLPI_URL ?? '').trim();
@@ -112,6 +118,31 @@ export class GlpiService {
           'Session-Token': sessionToken,
         },
       });
+    } finally {
+      await this.killSession(sessionToken);
+    }
+  }
+
+  async listUsersByName(searchText: string): Promise<GlpiListUserResponse> {
+    this.assertConfigured();
+
+    const sessionToken = await this.initSession();
+    try {
+      const client = this.getClient();
+      const response = await client.get('/User', {
+        headers: {
+          'App-Token': this.appToken,
+          'Session-Token': sessionToken,
+        },
+        params: {
+          range: '0-100',
+          searchText: {
+            name: searchText,
+          },
+        },
+      });
+
+      return Array.isArray(response.data) ? response.data : [];
     } finally {
       await this.killSession(sessionToken);
     }

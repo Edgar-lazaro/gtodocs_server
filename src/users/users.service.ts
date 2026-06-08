@@ -12,6 +12,7 @@ export class UsersService {
       where,
       select: {
         id: true,
+        username: true,
         nombre: true,
         apellido: true,
       },
@@ -20,6 +21,7 @@ export class UsersService {
 
     return rows.map((r) => ({
       id: r.id,
+      username: r.username,
       nombre: [r.nombre, r.apellido].filter(Boolean).join(' '),
     }));
   }

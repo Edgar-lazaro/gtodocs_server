@@ -157,6 +157,7 @@ export class TareasService {
         `usuario_asignado: ${legacyCreated.usuario_asignado}`,
       ].join('\n'),
       assignedUserId: legacyCreated.usuario_asignado,
+      requesterUserId: legacyCreated.asignado_por,
       source: { entity: 'tareas', id: legacyCreated.id.toString() },
     });
 

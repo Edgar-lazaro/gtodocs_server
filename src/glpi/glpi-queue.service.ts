@@ -5,6 +5,7 @@ export type GlpiTicketJobPayload = {
   title: string;
   description: string;
   assignedUserId: string;
+  requesterUserId?: string;
   source?: {
     entity: string;
     id: string;
