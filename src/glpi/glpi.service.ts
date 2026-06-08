@@ -123,7 +123,7 @@ export class GlpiService {
     }
   }
 
-  async listUsersByName(searchText: string): Promise<GlpiListUserResponse> {
+  async listUsers(): Promise<GlpiListUserResponse> {
     this.assertConfigured();
 
     const sessionToken = await this.initSession();
@@ -136,9 +136,6 @@ export class GlpiService {
         },
         params: {
           range: '0-100',
-          searchText: {
-            name: searchText,
-          },
         },
       });
 

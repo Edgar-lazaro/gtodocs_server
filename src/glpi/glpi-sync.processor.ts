@@ -36,22 +36,20 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
   }
 
   private async findGlpiUserIdByName(username?: string | null): Promise<number | null> {
-    const value = String(username ?? '').trim();
+    const value = String(username ?? '').trim().toLowerCase();
     if (!value) return null;
 
     try {
-      const users = await this.glpiService.listUsersByName(value);
+      const users = await this.glpiService.listUsers();
       const exact = users.find((user) => {
         const name = String(user?.name ?? '').trim().toLowerCase();
         const alt = String(user?.realname ?? '').trim().toLowerCase();
-        const needle = value.toLowerCase();
-        return name === needle || alt === needle;
+        return name === value || alt === value;
       });
 
-      const match = exact ?? users[0];
-      if (!match || match.id == null) return null;
+      if (!exact || exact.id == null) return null;
 
-      const id = Number(match.id);
+      const id = Number(exact.id);
       return Number.isInteger(id) ? id : null;
     } catch (error) {
       this.logger.warn(

@@ -8,7 +8,7 @@ import { CargosGuard } from './guards/cargos.guard';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthController } from './auth.controller';
 import { AdLdapService } from './ldap/ad-ldap.service';
-
+ 
 @Module({
   imports: [
     PrismaModule,
