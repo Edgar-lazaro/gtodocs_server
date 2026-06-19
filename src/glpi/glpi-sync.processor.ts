@@ -13,6 +13,12 @@ type GlpiTicketJobPayload = {
   };
 };
 
+type GlpiFollowupJobPayload = {
+  ticketId: number;
+  content: string;
+  userId?: string;
+};
+
 @Injectable()
 export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GlpiSyncProcessor.name);
@@ -32,7 +38,10 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
       where: { id: raw },
       select: { username: true },
     });
-    return user?.username?.trim() || null;
+    if (user?.username?.trim()) return user.username.trim();
+
+    // Si no es un UUID de app, puede ser un username de GLPI guardado directamente
+    return raw;
   }
 
   private async findGlpiUserIdByName(username?: string | null): Promise<number | null> {
@@ -68,6 +77,7 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    this.logger.log(`Sync processor starting with interval ${intervalMs}ms`);
     this.timer = setInterval(() => {
       void this.processPendingJobs();
     }, intervalMs);
@@ -94,7 +104,7 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
     ]);
 
     const input: Record<string, unknown> = {
-      name: payload.title?.trim() || 'Ticket generado desde GTO Docs',
+      name: payload.title?.trim() || 'Ticket generado desde GTODocs',
       content: payload.description?.trim() || 'Sin descripcion',
     };
 
@@ -115,10 +125,11 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
     this.running = true;
 
     try {
+      this.logger.log('Processing pending jobs...');
       const batchSize = Number(process.env.GLPI_SYNC_BATCH_SIZE ?? 5);
       const jobs = await this.prisma.syncQueue.findMany({
         where: {
-          entidad: 'glpi_ticket',
+          entidad: { in: ['glpi_ticket', 'glpi_followup'] },
           status: 'pending',
           procesado: false,
           lockedAt: null,
@@ -128,61 +139,134 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
         take: Number.isFinite(batchSize) && batchSize > 0 ? batchSize : 5,
       });
 
+      this.logger.log(`Found ${jobs.length} pending jobs`);
       for (const job of jobs) {
+        this.logger.log(`Processing job ${job.id} (${job.entidad})`);
         const locked = await this.prisma.syncQueue.updateMany({
           where: { id: job.id, lockedAt: null, procesado: false, status: 'pending' },
           data: { lockedAt: new Date() },
         });
-        if (locked.count === 0) continue;
+        if (locked.count === 0) {
+          this.logger.warn(`Job ${job.id} could not be locked, skipping`);
+          continue;
+        }
 
-        const payload = (job.payload ?? {}) as GlpiTicketJobPayload;
-
-        try {
-          const ticketInput = await this.buildTicketInput(payload);
-          const response = await this.glpiService.crearTicket(
-            ticketInput,
-          );
-          const responseData = response?.data;
-          const ticketId =
-            responseData && typeof responseData === 'object' && 'id' in responseData
-              ? String((responseData as { id: unknown }).id)
-              : null;
-
+        if (job.entidad === 'glpi_ticket') {
+          await this.processTicketJob(job);
+        } else if (job.entidad === 'glpi_followup') {
+          await this.processFollowupJob(job);
+        } else {
           await this.prisma.syncQueue.update({
             where: { id: job.id },
-            data: {
-              status: 'completed',
-              procesado: true,
-              processedAt: new Date(),
-              lockedAt: null,
-              lastError: null,
-              entidadId: ticketId ?? job.entidadId,
-            },
+            data: { status: 'error', lockedAt: null, lastError: 'Unknown entity' },
           });
-        } catch (error) {
-          const retries = job.retries + 1;
-          const maxRetries = job.maxRetries > 0 ? job.maxRetries : 20;
-          const exhausted = retries >= maxRetries;
-          const message = error instanceof Error ? error.message : String(error);
-
-          await this.prisma.syncQueue.update({
-            where: { id: job.id },
-            data: {
-              retries,
-              lockedAt: null,
-              lastError: message,
-              status: exhausted ? 'error' : 'pending',
-              nextRunAt: exhausted ? null : new Date(Date.now() + retries * 60_000),
-            },
-          });
-
-          this.logger.warn(
-            `GLPI sync failed for job ${job.id} (retry ${retries}/${maxRetries}): ${message}`,
-          );
         }
       }
+    } catch (error) {
+      this.logger.error(`processPendingJobs error: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.running = false;
+    }
+  }
+
+  private async processTicketJob(job: any) {
+    const payload = (job.payload ?? {}) as GlpiTicketJobPayload;
+
+    try {
+      const ticketInput = await this.buildTicketInput(payload);
+      const response = await this.glpiService.crearTicket(ticketInput);
+      const responseData = response?.data;
+      const ticketId =
+        responseData && typeof responseData === 'object' && 'id' in responseData
+          ? String((responseData as { id: unknown }).id)
+          : null;
+
+      if (ticketId) {
+        await this.prisma.tareas.updateMany({
+          where: { id: BigInt(payload.source?.id ?? '0') },
+          data: { glpi_ticket_id: Number(ticketId) },
+        });
+      }
+
+      await this.prisma.syncQueue.update({
+        where: { id: job.id },
+        data: {
+          status: 'completed',
+          procesado: true,
+          processedAt: new Date(),
+          lockedAt: null,
+          lastError: null,
+          entidadId: ticketId ?? job.entidadId,
+        },
+      });
+    } catch (error) {
+      const retries = job.retries + 1;
+      const maxRetries = job.maxRetries > 0 ? job.maxRetries : 20;
+      const exhausted = retries >= maxRetries;
+      const message = error instanceof Error ? error.message : String(error);
+
+      await this.prisma.syncQueue.update({
+        where: { id: job.id },
+        data: {
+          retries,
+          lockedAt: null,
+          lastError: message,
+          status: exhausted ? 'error' : 'pending',
+          nextRunAt: exhausted ? null : new Date(Date.now() + retries * 60_000),
+        },
+      });
+
+      this.logger.warn(
+        `GLPI ticket sync failed for job ${job.id} (retry ${retries}/${maxRetries}): ${message}`,
+      );
+    }
+  }
+
+  private async processFollowupJob(job: any) {
+    const payload = (job.payload ?? {}) as GlpiFollowupJobPayload;
+
+    try {
+      this.logger.log(`Processing followup job ${job.id} for ticket ${payload.ticketId}`);
+      const username = await this.findBackendUsernameById(payload.userId);
+      this.logger.log(`Followup username: ${username}`);
+      const glpiUserId = username ? await this.findGlpiUserIdByName(username) : null;
+      this.logger.log(`GLPI user ID: ${glpiUserId}`);
+      await this.glpiService.crearFollowup(
+        payload.ticketId,
+        payload.content,
+        glpiUserId ?? undefined,
+      );
+      await this.prisma.syncQueue.update({
+        where: { id: job.id },
+        data: {
+          status: 'completed',
+          procesado: true,
+          processedAt: new Date(),
+          lockedAt: null,
+          lastError: null,
+        },
+      });
+      this.logger.log(`Followup job ${job.id} completed successfully`);
+    } catch (error) {
+      const retries = job.retries + 1;
+      const maxRetries = job.maxRetries > 0 ? job.maxRetries : 20;
+      const exhausted = retries >= maxRetries;
+      const message = error instanceof Error ? error.message : String(error);
+
+      await this.prisma.syncQueue.update({
+        where: { id: job.id },
+        data: {
+          retries,
+          lockedAt: null,
+          lastError: message,
+          status: exhausted ? 'error' : 'pending',
+          nextRunAt: exhausted ? null : new Date(Date.now() + retries * 60_000),
+        },
+      });
+
+      this.logger.warn(
+        `GLPI followup sync failed for job ${job.id} (retry ${retries}/${maxRetries}): ${message}`,
+      );
     }
   }
 }

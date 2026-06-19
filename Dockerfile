@@ -18,7 +18,6 @@ RUN npx prisma generate
 RUN npm run build
 
 
-# Used by docker-compose to run migrations (keeps dev deps including prisma CLI)
 FROM build AS migrate
 WORKDIR /app
 
@@ -29,6 +28,7 @@ RUN npm prune --omit=dev
 
 
 FROM node:22-bookworm-slim AS runtime
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
 

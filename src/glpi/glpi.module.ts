@@ -10,6 +10,6 @@ import { GlpiSyncProcessor } from './glpi-sync.processor';
   imports: [PrismaModule, AuthModule],
   controllers: [GlpiController],
   providers: [GlpiService, GlpiQueueService, GlpiSyncProcessor],
-  exports: [GlpiQueueService],
+  exports: [GlpiQueueService, GlpiService],
 })
 export class GlpiModule {}
