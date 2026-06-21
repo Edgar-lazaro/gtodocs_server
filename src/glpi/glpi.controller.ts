@@ -179,7 +179,7 @@ export class GlpiController {
   )
   async subirDocumento(
     @Param('id') id: string,
-    @Body() body: { nombre?: string },
+    @Body() body: { nombre?: string; usuarioId?: string; followupId?: string },
     @UploadedFile() file?: any,
   ) {
     if (!file) {
@@ -191,7 +191,9 @@ export class GlpiController {
     }
     const nombre = body?.nombre || file.originalname || 'documento';
     const mime = file.mimetype || 'application/octet-stream';
-    return this.glpiService.subirDocumento(Number(id), nombre, buffer, mime);
+    const uid = body?.usuarioId ? Number(body.usuarioId) : undefined;
+    const fid = body?.followupId ? Number(body.followupId) : undefined;
+    return this.glpiService.subirDocumento(Number(id), nombre, buffer, mime, uid, fid);
   }
 
   // ── Validation ────────────────────────────────────────────────────────────

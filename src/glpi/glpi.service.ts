@@ -204,11 +204,12 @@ export class GlpiService {
     };
     const sessionToken = await this.initSession();
     try {
-      return await this.callGlpi('POST /ITILFollowup', () =>
+      const res = await this.callGlpi('POST /ITILFollowup', () =>
         this.getClient().post('/ITILFollowup', data, {
           headers: { 'App-Token': this.appToken, 'Session-Token': sessionToken },
         })
       );
+      return { id: Number((res as any)?.id ?? 0) };
     } finally { await this.killSession(sessionToken); }
   }
 
@@ -258,15 +259,8 @@ export class GlpiService {
         client.post('/ITILSolution', data, { headers })
       );
 
-      // 2. GLPI mueve el ticket a "Solucionado" (5) automáticamente.
-      //    Lo revertimos a "Pendiente" (3) para indicar que aguarda aprobación del supervisor.
-      try {
-        await client.put(`/Ticket/${ticketId}`, { input: { status: 3 } }, { headers });
-        this.logger.log(`Ticket ${ticketId} revertido a Pendiente (3) tras crear solución`);
-      } catch (e) {
-        this.logger.warn(`No se pudo revertir ticket ${ticketId} a Pendiente: ${e}`);
-      }
-
+      // GLPI gestiona el estado del ticket automáticamente al crear la solución.
+      // NO revertimos el estado: hacerlo hace que GLPI marque la solución como rechazada.
       return solutionRes;
     } finally { await this.killSession(sessionToken); }
   }
@@ -292,14 +286,14 @@ export class GlpiService {
 
   // ─── Documents ────────────────────────────────────────────────────────────
 
-  async subirDocumento(ticketId: number, fileName: string, fileBuffer: Buffer, mimeType: string) {
+  async subirDocumento(ticketId: number, fileName: string, fileBuffer: Buffer, mimeType: string, userId?: number, followupId?: number) {
     this.assertConfigured();
 
     if (!fileBuffer || fileBuffer.length === 0) {
       throw new BadRequestException('El archivo está vacío o no se recibió correctamente');
     }
 
-    this.logger.log(`subirDocumento ticket=${ticketId} file=${fileName} size=${fileBuffer.length} mime=${mimeType}`);
+    this.logger.log(`subirDocumento ticket=${ticketId} file=${fileName} followupId=${followupId ?? "none"}`);
 
     // GLPI REST API: el field name del multipart DEBE coincidir con el valor en _filename.
     // Usamos un nombre seguro sin corchetes para que PHP no lo convierta en array
@@ -313,6 +307,7 @@ export class GlpiService {
         input: {
           name: fileName,
           _filename: [glpiFieldName],
+          ...(userId ? { users_id: userId } : {}),
         },
       }),
     );
@@ -355,12 +350,24 @@ export class GlpiService {
         throw new BadRequestException('GLPI no devolvió un ID de documento');
       }
 
-      // 2. Link the document to the ticket
       const jsonHeaders = {
         'App-Token': this.appToken,
         'Session-Token': sessionToken,
         'Content-Type': 'application/json',
       };
+
+      // 2. Correct users_id — GLPI ignores it in multipart manifest
+      if (userId) {
+        try {
+          await client.put(
+            '/Document/' + String(docId),
+            { input: { users_id: userId } },
+            { headers: jsonHeaders },
+          );
+        } catch { /* non-critical */ }
+      }
+
+      // 3. Link the document to the ticket
       try {
         await client.post(
           '/Document_Item',
@@ -377,7 +384,18 @@ export class GlpiService {
         throw new BadRequestException(`GLPI: Error al vincular documento al ticket: ${msg}`);
       }
 
-      return { id: docId, message: `Documento '${fileName}' adjuntado exitosamente` };
+      // 4. Also link to the followup if provided (for proper grouping)
+      if (followupId && docId) {
+        try {
+          await client.post(
+            '/Document_Item',
+            { input: { documents_id: docId, itemtype: 'ITILFollowup', items_id: followupId } },
+            { headers: jsonHeaders },
+          );
+        } catch { /* non-critical */ }
+      }
+
+      return { id: docId, followupId: followupId ?? null, message: `Documento '${fileName}' adjuntado exitosamente` };
     } finally {
       await this.killSession(sessionToken);
     }
@@ -417,7 +435,7 @@ export class GlpiService {
         client.get(`/Ticket/${ticketId}/TicketTask`, { headers }),
         client.get(`/Ticket/${ticketId}/ITILSolution`, { headers }),
         client.get(`/Ticket/${ticketId}/TicketValidation`, { headers }),
-        client.get('/User', { headers, params: { range: '0-200' } }),
+        client.get('/User', { headers, params: { range: '0-500', recursive: true } }),
       ]);
 
       const extractData = (r: PromiseSettledResult<unknown>) =>
@@ -431,13 +449,47 @@ export class GlpiService {
       const validations = extractData(results[3]);
       const users = extractData(results[4]);
 
+      const buildName = (u: any) => {
+        const full = [u.firstname ?? '', u.realname ?? ''].filter(Boolean).join(' ').trim();
+        return full || u.name || null;
+      };
+
       const userMap = new Map<number, string>();
       for (const u of users) {
-        const uid = Number(u.id);
-        userMap.set(uid, u.name || u.realname || `Usuario #${uid}`);
+        userMap.set(Number(u.id), buildName(u) ?? `Usuario #${u.id}`);
+      }
+
+      // Fetch individually any user IDs not returned by the bulk list
+      const allIds = new Set([
+        ...followups.map((x: any) => Number(x.users_id)),
+        ...tasks.map((x: any) => Number(x.users_id)),
+        ...solutions.map((x: any) => Number(x.users_id)),
+        ...validations.map((x: any) => Number(x.users_id)),
+      ].filter(Boolean));
+      const missingIds = [...allIds].filter((id) => !userMap.has(id));
+      if (missingIds.length > 0) {
+        await Promise.all(missingIds.map(async (uid) => {
+          try {
+            const r = await client.get(`/User/${uid}`, { headers });
+            const name = buildName(r.data);
+            if (name) userMap.set(uid, name);
+          } catch { /* user not accessible */ }
+        }));
       }
 
       const items: any[] = [];
+      // Fetch linked doc IDs per followup (for client-side grouping)
+      const followupDocMap = new Map<number, number[]>();
+      if (followups.length > 0) {
+        await Promise.all(followups.map(async (f: any) => {
+          try {
+            const r = await client.get('/ITILFollowup/' + f.id + '/Document_Item', { headers });
+            const items2: any[] = Array.isArray(r.data) ? r.data : [];
+            followupDocMap.set(Number(f.id), items2.map((i: any) => Number(i.documents_id)).filter(Boolean));
+          } catch { followupDocMap.set(Number(f.id), []); }
+        }));
+      }
+
       for (const f of followups) {
         items.push({
           tipo: 'followup',
@@ -447,6 +499,7 @@ export class GlpiService {
           usuarioNombre: userMap.get(Number(f.users_id)) ?? null,
           fecha: f.date_creation ?? '',
           esPrivado: f.is_private === 1,
+          docIds: followupDocMap.get(Number(f.id)) ?? [],
         });
       }
       for (const t of tasks) {
@@ -544,15 +597,27 @@ export class GlpiService {
       const items: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
       if (items.length === 0) return [];
 
+      // Fetch users non-critically — documents still load if this fails
+      const userMap = new Map<number, string>();
+      try {
+        const usersRes = await client.get('/User', { headers, params: { range: '0-500', recursive: true } });
+        const users: any[] = Array.isArray(usersRes.data) ? usersRes.data : [];
+        for (const u of users) {
+          const uid = Number(u.id);
+          const full = [u.firstname ?? '', u.realname ?? ''].filter(Boolean).join(' ').trim();
+          userMap.set(uid, full || u.name || `Usuario #${uid}`);
+        }
+      } catch { /* names will be null, documents still load */ }
+
       const docs = await Promise.all(
-        items.map(async (item: any) => {
+        items.map(async (item) => {
           const docId = item.documents_id;
           if (!docId) return null;
           try {
             const docRes = await client.get(`/Document/${docId}`, { headers });
             const d = docRes.data;
-            // Omitir documentos en papelera
             if (d.is_deleted === 1) return null;
+            const uid = Number(d.users_id);
             return {
               id: d.id,
               nombre: d.name ?? d.filename ?? '',
@@ -561,6 +626,7 @@ export class GlpiService {
               size: d.filesize ?? 0,
               fecha: d.date_creation ?? '',
               usuarioId: d.users_id ?? null,
+              usuarioNombre: userMap.get(uid) ?? null,
             };
           } catch { return null; }
         }),
