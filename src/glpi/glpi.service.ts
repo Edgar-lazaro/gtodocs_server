@@ -261,7 +261,7 @@ export class GlpiService {
 
       // GLPI gestiona el estado del ticket automáticamente al crear la solución.
       // NO revertimos el estado: hacerlo hace que GLPI marque la solución como rechazada.
-      return solutionRes;
+      return { id: Number((solutionRes as any)?.id ?? 0) };
     } finally { await this.killSession(sessionToken); }
   }
 
@@ -286,7 +286,7 @@ export class GlpiService {
 
   // ─── Documents ────────────────────────────────────────────────────────────
 
-  async subirDocumento(ticketId: number, fileName: string, fileBuffer: Buffer, mimeType: string, userId?: number, followupId?: number) {
+  async subirDocumento(ticketId: number, fileName: string, fileBuffer: Buffer, mimeType: string, userId?: number, followupId?: number, solutionId?: number) {
     this.assertConfigured();
 
     if (!fileBuffer || fileBuffer.length === 0) {
@@ -395,7 +395,18 @@ export class GlpiService {
         } catch { /* non-critical */ }
       }
 
-      return { id: docId, followupId: followupId ?? null, message: `Documento '${fileName}' adjuntado exitosamente` };
+      // 5. Also link to the solution if provided (for proper grouping)
+      if (solutionId && docId) {
+        try {
+          await client.post(
+            '/Document_Item',
+            { input: { documents_id: docId, itemtype: 'ITILSolution', items_id: solutionId } },
+            { headers: jsonHeaders },
+          );
+        } catch { /* non-critical */ }
+      }
+
+      return { id: docId, followupId: followupId ?? null, solutionId: solutionId ?? null, message: `Documento '${fileName}' adjuntado exitosamente` };
     } finally {
       await this.killSession(sessionToken);
     }
@@ -513,6 +524,18 @@ export class GlpiService {
           estado: t.state,
         });
       }
+      // Fetch linked doc IDs per solution
+      const solutionDocMap = new Map<number, number[]>();
+      if (solutions.length > 0) {
+        await Promise.all(solutions.map(async (s: any) => {
+          try {
+            const r = await client.get('/ITILSolution/' + s.id + '/Document_Item', { headers });
+            const items2: any[] = Array.isArray(r.data) ? r.data : [];
+            solutionDocMap.set(Number(s.id), items2.map((i: any) => Number(i.documents_id)).filter(Boolean));
+          } catch { solutionDocMap.set(Number(s.id), []); }
+        }));
+      }
+
       for (const s of solutions) {
         items.push({
           tipo: 'solution',
@@ -522,6 +545,7 @@ export class GlpiService {
           usuarioNombre: userMap.get(Number(s.users_id)) ?? null,
           fecha: s.date_creation ?? '',
           estado: s.status,
+          docIds: solutionDocMap.get(Number(s.id)) ?? [],
         });
       }
       for (const v of validations) {
