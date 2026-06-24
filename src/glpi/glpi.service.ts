@@ -367,7 +367,8 @@ export class GlpiService {
         } catch { /* non-critical */ }
       }
 
-      // 3. Link the document to the ticket
+      // 3. Link the document to the ticket (skip when linked to followup/solution)
+      if (!followupId && !solutionId) {
       try {
         await client.post(
           '/Document_Item',
@@ -383,7 +384,7 @@ export class GlpiService {
         this.logger.error(`Document_Item link failed: ${msg}`);
         throw new BadRequestException(`GLPI: Error al vincular documento al ticket: ${msg}`);
       }
-
+      }
       // 4. Also link to the followup if provided (for proper grouping)
       if (followupId && docId) {
         try {
@@ -617,9 +618,44 @@ export class GlpiService {
       const client = this.getClient();
       const headers = { 'App-Token': this.appToken, 'Session-Token': sessionToken };
 
-      const itemsRes = await client.get(`/Ticket/${ticketId}/Document_Item`, { headers });
-      const items: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
-      if (items.length === 0) return [];
+      // Collect all document IDs: ticket-level + followup + solution docs
+      const allDocIds = new Set<number>();
+
+      // Ticket-level docs
+      try {
+        const itemsRes = await client.get(`/Ticket/${ticketId}/Document_Item`, { headers });
+        const tItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
+        for (const i of tItems) { if (i.documents_id) allDocIds.add(Number(i.documents_id)); }
+      } catch { /* continue */ }
+
+      // Followup docs
+      try {
+        const fuRes = await client.get(`/Ticket/${ticketId}/ITILFollowup`, { headers });
+        const followups: any[] = Array.isArray(fuRes.data) ? fuRes.data : [];
+        await Promise.all(followups.map(async (f: any) => {
+          try {
+            const diRes = await client.get(`/ITILFollowup/${f.id}/Document_Item`, { headers });
+            const diItems: any[] = Array.isArray(diRes.data) ? diRes.data : [];
+            for (const i of diItems) { if (i.documents_id) allDocIds.add(Number(i.documents_id)); }
+          } catch { /* continue */ }
+        }));
+      } catch { /* continue */ }
+
+      // Solution docs
+      try {
+        const solRes = await client.get(`/Ticket/${ticketId}/ITILSolution`, { headers });
+        const solutions: any[] = Array.isArray(solRes.data) ? solRes.data : [];
+        await Promise.all(solutions.map(async (s: any) => {
+          try {
+            const diRes = await client.get(`/ITILSolution/${s.id}/Document_Item`, { headers });
+            const diItems: any[] = Array.isArray(diRes.data) ? diRes.data : [];
+            for (const i of diItems) { if (i.documents_id) allDocIds.add(Number(i.documents_id)); }
+          } catch { /* continue */ }
+        }));
+      } catch { /* continue */ }
+
+      if (allDocIds.size === 0) return [];
+      const items = [...allDocIds].map((id) => ({ documents_id: id }));
 
       // Fetch users non-critically — documents still load if this fails
       const userMap = new Map<number, string>();
@@ -749,8 +785,30 @@ export class GlpiService {
     fileBuffer: Buffer,
     mimeType: string,
   ) {
+    this.assertConfigured();
+    const sessionToken = await this.initSession();
+    let followupId: number | undefined;
+    let solutionId: number | undefined;
+    try {
+      const client = this.getClient();
+      const headers = { 'App-Token': this.appToken, 'Session-Token': sessionToken };
+      // Find existing followup/solution links to preserve them
+      try {
+        const diRes = await client.get('/Document_Item', {
+          headers,
+          params: { 'searchText[documents_id]': String(docId), 'range': '0-100' },
+        });
+        const dis: any[] = Array.isArray(diRes.data) ? diRes.data : [];
+        for (const di of dis) {
+          if (di.itemtype === 'ITILFollowup' && di.items_id) followupId = Number(di.items_id);
+          if (di.itemtype === 'ITILSolution' && di.items_id) solutionId = Number(di.items_id);
+        }
+      } catch { /* continue without preserved links */ }
+    } finally {
+      await this.killSession(sessionToken);
+    }
     await this.eliminarDocumento(docId);
-    return this.subirDocumento(ticketId, fileName, fileBuffer, mimeType);
+    return this.subirDocumento(ticketId, fileName, fileBuffer, mimeType, undefined, followupId, solutionId);
   }
 
 }
