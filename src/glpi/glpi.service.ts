@@ -272,15 +272,35 @@ export class GlpiService {
 
   async aprobarSolucion(solutionId: number, approved: boolean) {
     this.assertConfigured();
-    // approved=true → status 3 (Accepted), approved=false → status 4 (Refused)
-    const data = { input: { status: approved ? 3 : 4 } };
     const sessionToken = await this.initSession();
     try {
-      return await this.callGlpi(`PUT /ITILSolution/${solutionId}`, () =>
-        this.getClient().put(`/ITILSolution/${solutionId}`, data, {
-          headers: { 'App-Token': this.appToken, 'Session-Token': sessionToken },
-        })
+      const client = this.getClient();
+      const headers = { 'App-Token': this.appToken, 'Session-Token': sessionToken };
+
+      // 1. Get solution details to obtain ticketId
+      const getRes = await client.get(`/ITILSolution/${solutionId}`, { headers });
+      const ticketId = getRes.data?.items_id;
+      this.logger.log(`aprobarSolucion id=${solutionId} ticketId=${ticketId} approved=${approved}`);
+
+      // 2. Update solution status: ACCEPTED=3, REFUSED=4 (CommonITILValidation constants)
+      const solutionStatus = approved ? 3 : 4;
+      await client.put(`/ITILSolution/${solutionId}`,
+        { input: { status: solutionStatus } },
+        { headers },
       );
+      this.logger.log(`aprobarSolucion solution status set to ${solutionStatus}`);
+
+      // 3. Update ticket status: CLOSED=6 (approved), IN_PROGRESS=2 (refused)
+      if (ticketId) {
+        const ticketStatus = approved ? 6 : 2;
+        await client.put(`/Ticket/${ticketId}`,
+          { input: { status: ticketStatus } },
+          { headers },
+        );
+        this.logger.log(`aprobarSolucion ticket ${ticketId} status set to ${ticketStatus}`);
+      }
+
+      return { success: true, solutionId, approved };
     } finally { await this.killSession(sessionToken); }
   }
 
