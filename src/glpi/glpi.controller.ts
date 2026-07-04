@@ -164,6 +164,14 @@ export class GlpiController {
     return this.glpiService.aprobarSolucion(Number(solutionId), body.approved);
   }
 
+  @Patch('validations/:validationId/approve')
+  aprobarValidacion(
+    @Param('validationId') validationId: string,
+    @Body() body: { approved: boolean },
+  ) {
+    return this.glpiService.aprobarValidacion(Number(validationId), body.approved);
+  }
+
   // ── Documents ─────────────────────────────────────────────────────────────
 
   /**

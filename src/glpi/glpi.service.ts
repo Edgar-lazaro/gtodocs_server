@@ -234,12 +234,10 @@ export class GlpiService {
     ticketId: number,
     content: string,
     solutiontypes_id: number,
-    _status: number,   // reservado para compatibilidad; GLPI gestiona su propio estado
+    _status: number,
     userId?: number,
   ) {
     this.assertConfigured();
-    // No enviamos "status" en el input: dejamos que GLPI asigne el estado de validación
-    // según su configuración interna. Esto evita que el campo sea ignorado o malinterpretado.
     const data = {
       input: {
         items_id: ticketId,
@@ -254,14 +252,31 @@ export class GlpiService {
       const client = this.getClient();
       const headers = { 'App-Token': this.appToken, 'Session-Token': sessionToken };
 
-      // 1. Crear la solución en GLPI
+      // 1. Crear la solución
       const solutionRes = await this.callGlpi('POST /ITILSolution', () =>
         client.post('/ITILSolution', data, { headers })
       );
+      const solutionId = Number((solutionRes as any)?.id ?? 0);
 
-      // GLPI gestiona el estado del ticket automáticamente al crear la solución.
-      // NO revertimos el estado: hacerlo hace que GLPI marque la solución como rechazada.
-      return { id: Number((solutionRes as any)?.id ?? 0) };
+      // 2. Crear TicketValidation automática para el solicitante del ticket
+      try {
+        const ticketRes = await client.get('/Ticket/' + ticketId, { headers });
+        const requesterId: number | null = ticketRes.data?.users_id_recipient ?? ticketRes.data?.users_id ?? null;
+        if (requesterId) {
+          await client.post('/TicketValidation', {
+            input: {
+              tickets_id: ticketId,
+              users_id_validate: requesterId,
+              comment_submission: 'Solución pendiente de aprobación.',
+            },
+          }, { headers });
+          this.logger.log('TicketValidation creada para usuario ' + requesterId);
+        }
+      } catch (e: any) {
+        this.logger.warn('No se pudo crear TicketValidation automática: ' + (e as any)?.message);
+      }
+
+      return { id: solutionId };
     } finally { await this.killSession(sessionToken); }
   }
 
@@ -301,6 +316,60 @@ export class GlpiService {
       }
 
       return { success: true, solutionId, approved };
+    } finally { await this.killSession(sessionToken); }
+  }
+
+
+  async aprobarValidacion(validationId: number, approved: boolean) {
+    this.assertConfigured();
+    const sessionToken = await this.initSession();
+    try {
+      const client = this.getClient();
+      const headers = { 'App-Token': this.appToken, 'Session-Token': sessionToken };
+
+      const valRes = await client.get(`/TicketValidation/${validationId}`, { headers });
+      const ticketId = valRes.data?.tickets_id;
+      this.logger.log(`aprobarValidacion id=${validationId} ticketId=${ticketId} approved=${approved}`);
+
+      const valStatus = approved ? 3 : 4;
+      // GLPI requiere comment_validation al rechazar (status=4)
+      const valInput: any = { status: valStatus };
+      if (!approved) valInput.comment_validation = 'Solución rechazada.';
+      try {
+        await client.put(`/TicketValidation/${validationId}`,
+          { input: valInput },
+          { headers },
+        );
+        this.logger.log(`TicketValidation ${validationId} status → ${valStatus}`);
+      } catch (e: any) {
+        const detail = e?.response?.data ?? e?.message;
+        this.logger.error(`Error TicketValidation: ${JSON.stringify(detail)}`);
+        throw new Error(`GLPI error: ${JSON.stringify(detail)}`);
+      }
+
+      if (ticketId) {
+        try {
+          const solRes = await client.get(`/Ticket/${ticketId}/ITILSolution`, { headers });
+          const solutions = Array.isArray(solRes.data) ? solRes.data : [];
+          if (solutions.length > 0) {
+            const lastSol = solutions[solutions.length - 1];
+            const solStatus = approved ? 3 : 4;
+            await client.put(`/ITILSolution/${lastSol.id}`,
+              { input: { status: solStatus } },
+              { headers },
+            ).catch((e: any) => this.logger.warn('ITILSolution update failed: ' + JSON.stringify(e?.response?.data ?? e?.message)));
+          }
+        } catch (e) {
+          this.logger.warn('No se pudo leer ITILSolution: ' + (e as any)?.message);
+        }
+        const ticketStatus = approved ? 6 : 2;
+        await client.put(`/Ticket/${ticketId}`,
+          { input: { status: ticketStatus } },
+          { headers },
+        ).catch((e: any) => this.logger.warn('Ticket status update failed: ' + JSON.stringify(e?.response?.data ?? e?.message)));
+      }
+
+      return { success: true, validationId, approved };
     } finally { await this.killSession(sessionToken); }
   }
 
