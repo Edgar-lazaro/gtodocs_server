@@ -11,6 +11,9 @@ type GlpiTicketJobPayload = {
     entity?: string;
     id?: string;
   };
+  // Payload crudo de GLPI para tickets creados directamente desde la app
+  // (POST /glpi/tickets). Ver GlpiQueueService.
+  input?: Record<string, unknown>;
 };
 
 type GlpiFollowupJobPayload = {
@@ -173,7 +176,12 @@ export class GlpiSyncProcessor implements OnModuleInit, OnModuleDestroy {
     const payload = (job.payload ?? {}) as GlpiTicketJobPayload;
 
     try {
-      const ticketInput = await this.buildTicketInput(payload);
+      // Tickets creados directamente desde la app (POST /glpi/tickets) ya
+      // traen el input completo de GLPI armado por el cliente; no hay que
+      // resolver title/description/usuarios como en el flujo de "tareas".
+      const ticketInput = payload.input
+        ? { input: payload.input }
+        : await this.buildTicketInput(payload);
       const response = await this.glpiService.crearTicket(ticketInput);
       const responseData = response?.data;
       const ticketId =

@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { GlpiService } from './glpi.service';
+import { GlpiQueueService } from './glpi-queue.service';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 
 // Static catalogs ────────────────────────────────────────────────────────────
@@ -45,13 +46,22 @@ const CATEGORIAS_TAREA = [{ id: 0, nombre: 'Sin categoría' }];
 @Controller('glpi')
 @UseGuards(JwtGuard)
 export class GlpiController {
-  constructor(private readonly glpiService: GlpiService) {}
+  constructor(
+    private readonly glpiService: GlpiService,
+    private readonly glpiQueue: GlpiQueueService,
+  ) {}
 
   // ── Tickets ───────────────────────────────────────────────────────────────
 
+  // No llama a GLPI directo: con muchos usuarios creando tickets a la vez,
+  // GLPI se satura (initSession+create+killSession por request se vuelve
+  // lento en bloque). Se encola y el GlpiSyncProcessor lo manda a GLPI a un
+  // ritmo controlado (ver GLPI_SYNC_BATCH_SIZE/GLPI_SYNC_INTERVAL_MS). El
+  // cliente no depende del id devuelto aquí.
   @Post('tickets')
-  crearTicket(@Body() dto: any) {
-    return this.glpiService.crearTicket(dto);
+  async crearTicket(@Body() dto: any) {
+    const job = await this.glpiQueue.enqueueTicket({ input: dto?.input ?? dto });
+    return { queued: true, jobId: job.id };
   }
 
   @Get('tickets')
