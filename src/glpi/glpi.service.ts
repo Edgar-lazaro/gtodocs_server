@@ -138,12 +138,16 @@ export class GlpiService {
 
   async obtenerTickets(criteria?: Record<string, string>[]) {
     this.assertConfigured();
-    const params: Record<string, unknown> = { range: '0-999', sort: 'date_mod', order: 'DESC' };
+
+    // GET /Ticket (getItems) ignora silenciosamente el parámetro "criteria[]"
+    // (solo /search/{itemtype} lo respeta). Con criteria, usamos /search para
+    // obtener los IDs que de verdad cumplen el filtro y luego pedimos cada
+    // ticket completo, para mantener la misma forma de respuesta de siempre.
     if (criteria?.length) {
-      criteria.forEach((c, i) => {
-        Object.entries(c).forEach(([k, v]) => { params[`criteria[${i}][${k}]`] = v; });
-      });
+      return this.buscarTicketsFiltrados(criteria);
     }
+
+    const params: Record<string, unknown> = { range: '0-999', sort: 'date_mod', order: 'DESC' };
     if (this.isBearerMode()) {
       const resp = await axios.get(`${this.getApiRoot()}/Ticket`, {
         timeout: Number(process.env.GLPI_TIMEOUT_MS ?? 10000),
@@ -159,6 +163,49 @@ export class GlpiService {
         params,
       });
       return Array.isArray(resp.data) ? resp.data : [];
+    } finally { await this.killSession(sessionToken); }
+  }
+
+  private async buscarTicketsFiltrados(criteria: Record<string, string>[]) {
+    const searchParams: Record<string, unknown> = { range: '0-999' };
+    criteria.forEach((c, i) => {
+      Object.entries(c).forEach(([k, v]) => { searchParams[`criteria[${i}][${k}]`] = v; });
+    });
+
+    const fetchIds = async (headers: Record<string, string>, get: (url: string, cfg: any) => Promise<AxiosResponse>) => {
+      const searchRes = await get('/search/Ticket', { headers, params: searchParams });
+      const rows: any[] = Array.isArray(searchRes.data?.data) ? searchRes.data.data : [];
+      // El campo "2" es el ID del ticket (search option estándar de GLPI).
+      return [...new Set(rows.map((r) => Number(r['2'])).filter((id) => Number.isFinite(id) && id > 0))];
+    };
+
+    const fetchTickets = async (ids: number[], headers: Record<string, string>, get: (url: string, cfg: any) => Promise<AxiosResponse>) => {
+      const tickets = await Promise.all(
+        ids.map((id) => get(`/Ticket/${id}`, { headers }).then((r) => r.data).catch(() => null)),
+      );
+      return tickets
+        .filter(Boolean)
+        .sort((a: any, b: any) => new Date(b.date_mod ?? 0).getTime() - new Date(a.date_mod ?? 0).getTime());
+    };
+
+    if (this.isBearerMode()) {
+      const headers = { Authorization: `Bearer ${this.bearerToken}` };
+      const get = (url: string, cfg: any) => axios.get(`${this.getApiRoot()}${url}`, {
+        timeout: Number(process.env.GLPI_TIMEOUT_MS ?? 10000), ...cfg, headers: { ...headers, ...cfg.headers },
+      });
+      const ids = await fetchIds(headers, get);
+      if (!ids.length) return [];
+      return fetchTickets(ids, headers, get);
+    }
+
+    const sessionToken = await this.initSession();
+    try {
+      const client = this.getClient();
+      const headers = { 'App-Token': this.appToken, 'Session-Token': sessionToken };
+      const get = (url: string, cfg: any) => client.get(url, cfg);
+      const ids = await fetchIds(headers, get);
+      if (!ids.length) return [];
+      return fetchTickets(ids, headers, get);
     } finally { await this.killSession(sessionToken); }
   }
 
