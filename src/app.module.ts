@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, seconds } from '@nestjs/throttler';
 
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
@@ -35,7 +35,10 @@ import { FuelReportsModule } from './fuel-reports/fuel-reports.module';
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([
       {
-        ttl: Number(process.env.THROTTLE_TTL_SECONDS ?? 60),
+        // @nestjs/throttler v5+ espera ttl en milisegundos (antes eran
+        // segundos). Sin este helper, THROTTLE_TTL_SECONDS=60 se interpreta
+        // como 60ms y el rate limit queda 1000x mas corto de lo previsto.
+        ttl: seconds(Number(process.env.THROTTLE_TTL_SECONDS ?? 60)),
         limit: Number(process.env.THROTTLE_LIMIT ?? 10),
       },
     ]),
