@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { Injectable, ServiceUnavailableException, BadRequestException, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 type GlpiInitSessionResponse = {
   session_token?: string;
@@ -19,6 +20,8 @@ export class GlpiService {
   private userToken = (process.env.GLPI_USER_TOKEN ?? '').trim();
   private client: AxiosInstance | null = null;
   private readonly logger = new Logger(GlpiService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -258,11 +261,24 @@ export class GlpiService {
       );
       const solutionId = Number((solutionRes as any)?.id ?? 0);
 
-      // 2. Crear TicketValidation automática para el solicitante del ticket
+      // 2. Crear TicketValidation automática para el/los solicitante(s) real(es) del ticket
+      // (Ticket_User type=1 = Requester; users_id_recipient es solo quien registró el ticket
+      // en GLPI y puede ser un técnico distinto del solicitante real).
       try {
-        const ticketRes = await client.get('/Ticket/' + ticketId, { headers });
-        const requesterId: number | null = ticketRes.data?.users_id_recipient ?? ticketRes.data?.users_id ?? null;
-        if (requesterId) {
+        const ticketUserRes = await client.get(`/Ticket/${ticketId}/Ticket_User`, { headers });
+        const ticketUsers: any[] = Array.isArray(ticketUserRes.data) ? ticketUserRes.data : [];
+        let requesterIds = [...new Set(
+          ticketUsers.filter((u) => Number(u.type) === 1).map((u) => Number(u.users_id)),
+        )];
+
+        if (requesterIds.length === 0) {
+          // Fallback si no hay relación Ticket_User (no debería ocurrir en GLPI normal)
+          const ticketRes = await client.get('/Ticket/' + ticketId, { headers });
+          const fallbackId: number | null = ticketRes.data?.users_id_recipient ?? null;
+          if (fallbackId) requesterIds = [Number(fallbackId)];
+        }
+
+        for (const requesterId of requesterIds) {
           await client.post('/TicketValidation', {
             input: {
               tickets_id: ticketId,
@@ -335,24 +351,23 @@ export class GlpiService {
       // GLPI requiere comment_validation al rechazar (status=4)
       const valInput: any = { status: valStatus };
       if (!approved) valInput.comment_validation = 'Solución rechazada.';
-      try {
-        await client.put(`/TicketValidation/${validationId}`,
-          { input: valInput },
-          { headers },
-        );
-        this.logger.log(`TicketValidation ${validationId} status → ${valStatus}`);
-      } catch (e: any) {
-        const detail = e?.response?.data ?? e?.message;
-        this.logger.error(`Error TicketValidation: ${JSON.stringify(detail)}`);
-        throw new Error(`GLPI error: ${JSON.stringify(detail)}`);
-      }
+      // Intento best-effort: GLPI 11 bloquea por diseño que un usuario distinto
+      // al validador objetivo cambie este status (ver glpi-project/glpi#19206),
+      // así que esto normalmente no persiste cuando llamamos con la cuenta de
+      // servicio compartida. La decisión real se guarda abajo en nuestra BD.
+      await client.put(`/TicketValidation/${validationId}`,
+        { input: valInput },
+        { headers },
+      ).catch((e: any) => this.logger.warn('TicketValidation update (best-effort): ' + JSON.stringify(e?.response?.data ?? e?.message)));
 
+      let solutionId: number | null = null;
       if (ticketId) {
         try {
           const solRes = await client.get(`/Ticket/${ticketId}/ITILSolution`, { headers });
           const solutions = Array.isArray(solRes.data) ? solRes.data : [];
           if (solutions.length > 0) {
             const lastSol = solutions[solutions.length - 1];
+            solutionId = Number(lastSol.id);
             const solStatus = approved ? 3 : 4;
             await client.put(`/ITILSolution/${lastSol.id}`,
               { input: { status: solStatus } },
@@ -368,6 +383,13 @@ export class GlpiService {
           { headers },
         ).catch((e: any) => this.logger.warn('Ticket status update failed: ' + JSON.stringify(e?.response?.data ?? e?.message)));
       }
+
+      // Fuente de verdad para la UI: nuestra propia BD (ver comentario arriba).
+      await this.prisma.glpi_validacion_decisiones.upsert({
+        where: { validationId },
+        create: { validationId, ticketId: Number(ticketId ?? 0), solutionId, approved },
+        update: { approved, solutionId },
+      });
 
       return { success: true, validationId, approved };
     } finally { await this.killSession(sessionToken); }
@@ -638,7 +660,18 @@ export class GlpiService {
           docIds: solutionDocMap.get(Number(s.id)) ?? [],
         });
       }
+      // GLPI 11 bloquea que la cuenta de servicio cambie el status de una
+      // validación ajena (glpi-project/glpi#19206), así que el status real
+      // de aprobado/rechazado vive en nuestra propia BD, no en GLPI.
+      const decisiones = validations.length
+        ? await this.prisma.glpi_validacion_decisiones.findMany({
+            where: { validationId: { in: validations.map((v: any) => Number(v.id)) } },
+          })
+        : [];
+      const decisionMap = new Map(decisiones.map((d) => [d.validationId, d.approved]));
+
       for (const v of validations) {
+        const decision = decisionMap.get(Number(v.id));
         items.push({
           tipo: 'validation',
           id: v.id,
@@ -646,8 +679,12 @@ export class GlpiService {
           usuarioId: v.users_id,
           usuarioNombre: userMap.get(Number(v.users_id)) ?? null,
           fecha: v.submission_date ?? '',
-          estado: v.status,
-          usuarioValidacion: v.users_id_validate,
+          estado: decision === undefined ? v.status : (decision ? 3 : 4),
+          // GLPI 11+ ya no llena users_id_validate (queda en 0); el validador real
+          // vive en items_id_target/itemtype_target (soporta User o Group).
+          usuarioValidacion: v.itemtype_target === 'User'
+            ? Number(v.items_id_target)
+            : Number(v.users_id_validate) || null,
         });
       }
 

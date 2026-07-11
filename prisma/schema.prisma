@@ -276,3 +276,18 @@ model vehiculos {
   uso_car_tics  uso_car_tics[]
   carga_car_tics carga_car_tics[]
 }
+
+// GLPI 11 bloquea (por seguridad) que un tercero cambie el status de un
+// TicketValidation ajeno via API, incluso con permisos de admin (ver PR
+// glpi-project/glpi#19206). Como la app siempre habla con GLPI usando una
+// cuenta de servicio compartida, guardamos aqui la decision real del
+// solicitante y la usamos como fuente de verdad en vez del campo de GLPI.
+model glpi_validacion_decisiones {
+  id           BigInt   @id @default(autoincrement())
+  validationId Int      @unique
+  ticketId     Int
+  solutionId   Int?
+  approved     Boolean
+  glpiUserId   Int?
+  createdAt    DateTime @default(now())
+}
