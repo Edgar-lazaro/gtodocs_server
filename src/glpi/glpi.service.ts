@@ -744,7 +744,35 @@ export class GlpiService {
 
   // ─── Users ────────────────────────────────────────────────────────────────
 
+  // El listado de usuarios cambia poco (altas/bajas ocasionales) pero se
+  // pedía completo por sesión GLPI nueva en CADA creación de ticket,
+  // seguimiento y solución (via findGlpiUserIdByUsername). Con 150-250
+  // usuarios concurrentes eso multiplicaba la carga sobre GLPI varias
+  // veces por acción. Cache en memoria con TTL + single-flight: si el
+  // cache expira justo cuando llega una ráfaga, solo se dispara UNA
+  // llamada real a GLPI y todas las esperan esa misma promesa.
+  private usersCache: { data: GlpiListUserResponse; expiresAt: number } | null = null;
+  private usersCacheInFlight: Promise<GlpiListUserResponse> | null = null;
+
   async listUsers(): Promise<GlpiListUserResponse> {
+    const now = Date.now();
+    if (this.usersCache && this.usersCache.expiresAt > now) {
+      return this.usersCache.data;
+    }
+    if (this.usersCacheInFlight) {
+      return this.usersCacheInFlight;
+    }
+    const ttlMs = Number(process.env.GLPI_USERS_CACHE_TTL_MS ?? 5 * 60_000);
+    this.usersCacheInFlight = this.fetchUsersFromGlpi()
+      .then((data) => {
+        this.usersCache = { data, expiresAt: Date.now() + ttlMs };
+        return data;
+      })
+      .finally(() => { this.usersCacheInFlight = null; });
+    return this.usersCacheInFlight;
+  }
+
+  private async fetchUsersFromGlpi(): Promise<GlpiListUserResponse> {
     this.assertConfigured();
     const sessionToken = await this.initSession();
     try {
