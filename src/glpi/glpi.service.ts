@@ -1012,4 +1012,197 @@ export class GlpiService {
     return this.subirDocumento(ticketId, fileName, fileBuffer, mimeType, undefined, followupId, solutionId);
   }
 
+  // ─── Activos: inventario de dispositivos móviles ───────────────────────────
+  // Android -> Phone, iOS/iPadOS -> Computer (tipo "iPad"). A diferencia del
+  // resto de este servicio (una sesión GLPI por llamada), aquí se abre UNA
+  // sola sesión para toda la operación porque un solo registro implica varias
+  // llamadas encadenadas (dedup + resolver catálogos + crear/actualizar).
+
+  /** Busca un dropdown/catálogo de GLPI por nombre exacto; si no existe, lo crea. */
+  private async resolverDropdown(
+    client: AxiosInstance,
+    headers: Record<string, string>,
+    itemtype: string,
+    nombre: string,
+  ): Promise<number | undefined> {
+    const valor = nombre?.trim();
+    if (!valor) return undefined;
+    const resp = await client.get(`/${itemtype}`, {
+      headers,
+      params: { 'searchText[name]': valor, range: '0-10' },
+    });
+    const items: any[] = Array.isArray(resp.data) ? resp.data : [];
+    const exact = items.find(
+      (i) => String(i?.name ?? '').trim().toLowerCase() === valor.toLowerCase(),
+    );
+    if (exact?.id != null) return Number(exact.id);
+
+    const created = await client.post(`/${itemtype}`, { input: { name: valor } }, { headers });
+    const newId = Array.isArray(created.data) ? created.data[0]?.id : created.data?.id;
+    return newId != null ? Number(newId) : undefined;
+  }
+
+  /** Dedup: busca un Phone/Computer existente por número de serie o IMEI (otherserial). */
+  private async buscarDispositivoExistente(
+    client: AxiosInstance,
+    headers: Record<string, string>,
+    itemtype: 'Phone' | 'Computer',
+    serial?: string,
+    imei?: string,
+  ): Promise<{ id: number } | null> {
+    if (!serial && !imei) return null;
+    // Sin forcedisplay, GLPI solo devuelve las columnas por defecto de la
+    // vista de lista (que no incluyen el ID) — el bug hacia que id siempre
+    // saliera undefined y esto nunca deduplicara, creando un activo nuevo
+    // cada vez.
+    const params: Record<string, unknown> = { range: '0-1', 'forcedisplay[0]': '2' };
+    let idx = 0;
+    if (serial) {
+      params[`criteria[${idx}][field]`] = '5';
+      params[`criteria[${idx}][searchtype]`] = 'equals';
+      params[`criteria[${idx}][value]`] = serial;
+      idx++;
+    }
+    if (imei) {
+      if (idx > 0) params[`criteria[${idx}][link]`] = 'OR';
+      params[`criteria[${idx}][field]`] = '6';
+      params[`criteria[${idx}][searchtype]`] = 'equals';
+      params[`criteria[${idx}][value]`] = imei;
+    }
+    const resp = await client.get(`/search/${itemtype}`, { headers, params });
+    const rows: any[] = Array.isArray(resp.data?.data) ? resp.data.data : [];
+    const id = rows[0]?.['2'];
+    return id != null ? { id: Number(id) } : null;
+  }
+
+  /**
+   * RAM/almacenamiento/batería/MAC/número de línea no tienen un campo simple
+   * en Phone/Computer (RAM y disco viven en sub-recursos de componentes tipo
+   * Item_DeviceMemory, que requieren resolver/crear catálogos de hardware
+   * aparte) — se anotan como texto legible en comentarios en vez de modelar
+   * esos sub-recursos, para no inventar datos estructurados de más.
+   */
+  private armarComentarioDispositivo(dto: any): string {
+    const partes: string[] = [];
+    if (dto.so || dto.soVersion) {
+      partes.push(`SO: ${[dto.so, dto.soVersion].filter(Boolean).join(' ')}`);
+    }
+    if (dto.ramMb) partes.push(`RAM: ${(dto.ramMb / 1024).toFixed(1)} GB`);
+    if (dto.almacenamientoTotalMb) {
+      const libre = dto.almacenamientoLibreMb
+        ? `${(dto.almacenamientoLibreMb / 1024).toFixed(1)} GB libres`
+        : 'libre no reportado';
+      partes.push(`Almacenamiento: ${(dto.almacenamientoTotalMb / 1024).toFixed(1)} GB total, ${libre}`);
+    }
+    if (dto.macWifi) partes.push(`MAC Wi-Fi: ${dto.macWifi}`);
+    if (dto.bateriaNivel != null) partes.push(`Batería al registrar: ${dto.bateriaNivel}%`);
+    if (dto.numeroTelefono) partes.push(`Número de línea: ${dto.numeroTelefono}`);
+    partes.push(`Registrado vía GTO Docs el ${new Date().toISOString()}`);
+    if (dto.comentarioExtra) partes.push(String(dto.comentarioExtra));
+    return partes.join('\n');
+  }
+
+  async registrarDispositivoMovil(dto: any, glpiUserId?: number) {
+    this.assertConfigured();
+    if (!dto?.serial) {
+      throw new BadRequestException('El número de serie es obligatorio para registrar el activo');
+    }
+    const itemtype: 'Phone' | 'Computer' = dto.os === 'android' ? 'Phone' : 'Computer';
+    const esIpad = itemtype === 'Computer';
+
+    const sessionToken = await this.initSession();
+    try {
+      const client = this.getClient();
+      const headers = { 'App-Token': this.appToken, 'Session-Token': sessionToken };
+
+      const existente = await this.buscarDispositivoExistente(
+        client, headers, itemtype, dto.serial, dto.imei,
+      );
+
+      const manufacturers_id = dto.fabricante
+        ? await this.resolverDropdown(client, headers, 'Manufacturer', dto.fabricante)
+        : undefined;
+      const modelo_id = dto.modelo
+        ? await this.resolverDropdown(client, headers, esIpad ? 'ComputerModel' : 'PhoneModel', dto.modelo)
+        : undefined;
+      const tipo_id = esIpad
+        ? await this.resolverDropdown(client, headers, 'ComputerType', 'iPad')
+        : await this.resolverDropdown(client, headers, 'PhoneType', 'Smartphone');
+      const autoupdatesystems_id = await this.resolverDropdown(
+        client, headers, 'AutoUpdateSystem', 'GTO Docs',
+      );
+
+      const input: Record<string, unknown> = {
+        name: dto.nombre?.trim() || dto.modelo?.trim() || `Dispositivo ${dto.serial}`,
+        serial: dto.serial,
+        comment: this.armarComentarioDispositivo(dto),
+      };
+      if (autoupdatesystems_id) input.autoupdatesystems_id = autoupdatesystems_id;
+      if (dto.imei) input.otherserial = dto.imei;
+      if (dto.uuid) input.uuid = dto.uuid;
+      if (manufacturers_id) input.manufacturers_id = manufacturers_id;
+      if (dto.numeroEmpleado) input.contact_num = dto.numeroEmpleado;
+      if (glpiUserId) input.users_id_tech = glpiUserId;
+      if (dto.usuarioId) input.users_id = dto.usuarioId;
+
+      if (esIpad) {
+        if (modelo_id) input.computermodels_id = modelo_id;
+        if (tipo_id) input.computertypes_id = tipo_id;
+      } else {
+        if (modelo_id) input.phonemodels_id = modelo_id;
+        if (tipo_id) input.phonetypes_id = tipo_id;
+        if (dto.fabricante) input.brand = dto.fabricante;
+      }
+
+      let activoId: number;
+      let actualizado = false;
+      if (existente) {
+        await this.callGlpi(`PUT /${itemtype}/${existente.id}`, () =>
+          client.put(`/${itemtype}/${existente.id}`, { input: { id: existente.id, ...input } }, { headers }),
+        );
+        activoId = existente.id;
+        actualizado = true;
+      } else {
+        const created = await this.callGlpi(`POST /${itemtype}`, () =>
+          client.post(`/${itemtype}`, { input }, { headers }),
+        );
+        activoId = Number((created as any)?.id);
+      }
+
+      // Solo Computer tiene relación estructurada de Sistema Operativo; Phone
+      // no la tiene en este GLPI (confirmado vía listSearchOptions), por eso
+      // el SO de Android ya quedó como texto en el comentario arriba.
+      if (esIpad && dto.soVersion) {
+        try {
+          const os_id = await this.resolverDropdown(client, headers, 'OperatingSystem', dto.so || 'iOS/iPadOS');
+          const osver_id = await this.resolverDropdown(client, headers, 'OperatingSystemVersion', dto.soVersion);
+          await client.post(
+            '/Item_OperatingSystem',
+            {
+              input: {
+                itemtype: 'Computer',
+                items_id: activoId,
+                operatingsystems_id: os_id,
+                operatingsystemversions_id: osver_id,
+              },
+            },
+            { headers },
+          );
+        } catch (e: any) {
+          this.logger.warn(
+            'No se pudo asociar SO al iPad: ' +
+              (e?.response?.data ? JSON.stringify(e.response.data) : e?.message),
+          );
+        }
+      }
+
+      const frontPath = esIpad ? 'computer' : 'phone';
+      const link = `${this.baseUrl.replace(/\/$/, '')}/front/${frontPath}.form.php?id=${activoId}`;
+
+      return { id: activoId, itemtype, actualizado, link };
+    } finally {
+      await this.killSession(sessionToken);
+    }
+  }
+
 }

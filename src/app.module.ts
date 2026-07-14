@@ -29,6 +29,7 @@ import { JwtStrategy } from './auth/strategies/jwt.strategy';
 import { ReportesModule } from './reportes/reportes.module';
 import { ChecklistsModule } from './checklists/checklists.module';
 import { FuelReportsModule } from './fuel-reports/fuel-reports.module';
+import { ActivosModule } from './activos/activos.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { FuelReportsModule } from './fuel-reports/fuel-reports.module';
     ReportesModule,
     ChecklistsModule,
     FuelReportsModule,
+    ActivosModule,
   ],
   providers: [JwtStrategy],
   controllers: [],
